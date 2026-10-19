@@ -2,6 +2,11 @@
 /**
  * Read-only audit of the Appwrite project, run before migrating to Aiven.
  *
+ * Usage:
+ *   APPWRITE_API_KEY=your_key npm run audit:appwrite
+ *
+ * Everything else is read from .env.local.
+ *
  * Reports how much data actually exists so the migration can be sized: a few test rows
  * need a single-pass script, while real history needs batching, resumable checkpoints and
  * a verification pass. Guessing wrong in either direction wastes effort.
@@ -15,14 +20,52 @@
  * The API key needs read scope on databases, storage and users. Create one in the Appwrite
  * console under Overview > Integrations > API keys. Do not commit it.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
 import { Client, Query, Storage, TablesDB, Users } from 'node-appwrite';
 
+/**
+ * Reads .env.local for the resource ids.
+ *
+ * Only the API key has to be supplied by hand. The project, database and bucket ids are
+ * already in .env.local because the app shipped with them — they are public client
+ * configuration, not secrets. Making the operator retype them was needless friction and
+ * an easy way to audit the wrong project.
+ *
+ * The API key is deliberately NOT read from a file: it is a real credential, it does not
+ * belong in a client env file, and it should live only in the shell for the one command
+ * that needs it.
+ */
+function readEnvLocal() {
+  const path = join(dirname(fileURLToPath(import.meta.url)), '..', '.env.local');
+  try {
+    const values = {};
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+      if (match) values[match[1]] = match[2].trim().replace(/^['"]|['"]$/g, '');
+    }
+    return values;
+  } catch {
+    return {};
+  }
+}
+
+const local = readEnvLocal();
+
+const first = (...values) => values.map((v) => v?.trim()).find((v) => v);
+
 const config = {
-  endpoint: process.env.APPWRITE_ENDPOINT?.trim() || 'https://sgp.cloud.appwrite.io/v1',
-  projectId: process.env.APPWRITE_PROJECT_ID?.trim(),
-  apiKey: process.env.APPWRITE_API_KEY?.trim(),
-  databaseId: process.env.APPWRITE_DATABASE_ID?.trim() || 'zozar',
-  bucketId: process.env.APPWRITE_STORAGE_BUCKET_ID?.trim() || 'zozar-private',
+  endpoint: first(process.env.APPWRITE_ENDPOINT, 'https://sgp.cloud.appwrite.io/v1'),
+  projectId: first(process.env.APPWRITE_PROJECT_ID, local.EXPO_PUBLIC_APPWRITE_PROJECT_ID),
+  apiKey: first(process.env.APPWRITE_API_KEY),
+  databaseId: first(process.env.APPWRITE_DATABASE_ID, local.EXPO_PUBLIC_APPWRITE_DATABASE_ID, 'zozar'),
+  bucketId: first(
+    process.env.APPWRITE_STORAGE_BUCKET_ID,
+    local.EXPO_PUBLIC_APPWRITE_STORAGE_BUCKET_ID,
+    'zozar-private',
+  ),
 };
 
 const TABLES = [
@@ -42,8 +85,18 @@ function fail(message) {
   process.exit(1);
 }
 
-if (!config.projectId) fail('APPWRITE_PROJECT_ID is not set.');
-if (!config.apiKey) fail('APPWRITE_API_KEY is not set.');
+if (!config.projectId) {
+  fail('No project id. Set APPWRITE_PROJECT_ID, or put EXPO_PUBLIC_APPWRITE_PROJECT_ID in .env.local.');
+}
+if (!config.apiKey) {
+  fail(
+    'APPWRITE_API_KEY is not set.\n\n' +
+      'Create a read-scoped key in the Appwrite console under\n' +
+      '  Overview > Integrations > API keys\n' +
+      'with read access to databases, storage and users, then run:\n\n' +
+      '  APPWRITE_API_KEY=your_key npm run audit:appwrite\n',
+  );
+}
 
 const client = new Client()
   .setEndpoint(config.endpoint)
