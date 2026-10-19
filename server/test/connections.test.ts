@@ -131,6 +131,41 @@ suite('connection routes', () => {
       expect(theySee.body.connections[0].relationship).toBe('incoming');
     });
 
+    it('carries the conversation id on an accepted connection', async () => {
+      // The app navigates to a chat by connection, so the mapping has to come from the
+      // server rather than depend on the People screen having loaded first.
+      const { body } = await invite(asha, RAVI);
+      expect(body.connection.threadId ?? null).toBeNull();
+
+      await request(`/v1/connections/${body.connection.id}/respond`, {
+        method: 'POST',
+        token: ravi,
+        body: JSON.stringify({ accept: true }),
+      });
+
+      const listed = await request('/v1/connections', { token: asha });
+      const threadId = listed.body.connections[0].threadId;
+      expect(threadId).toBeTruthy();
+
+      // It must be the same conversation both people see.
+      const theirs = await request('/v1/connections', { token: ravi });
+      expect(theirs.body.connections[0].threadId).toBe(threadId);
+
+      // And it must actually resolve.
+      expect((await request(`/v1/chat/threads/${threadId}`, { token: asha })).status).toBe(200);
+    });
+
+    it('leaves threadId null on a pending or declined connection', async () => {
+      const { body } = await invite(asha, RAVI);
+      await request(`/v1/connections/${body.connection.id}/respond`, {
+        method: 'POST',
+        token: ravi,
+        body: JSON.stringify({ accept: false }),
+      });
+      const listed = await request('/v1/connections', { token: asha });
+      expect(listed.body.connections[0].threadId).toBeNull();
+    });
+
     it('hides a connection from an unrelated user as 404', async () => {
       const { body } = await invite(asha, RAVI);
       const response = await request(`/v1/connections/${body.connection.id}`, { token: nosy });

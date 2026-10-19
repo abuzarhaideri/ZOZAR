@@ -12,6 +12,8 @@ import {
 } from '@/lib/appwrite-client';
 import type { VoiceNoteArtifact } from '@/services/voice-recorder-service';
 import type { PushTokenRegistration } from '@/services/push-token-service';
+import { isApiConfigured } from '@/lib/api-client';
+import { createRestRepository } from './rest-repository';
 import type {
   Commitment as DomainCommitment,
   Difficulty as DomainDifficulty,
@@ -21,7 +23,7 @@ import type {
   WakeSoundKey,
 } from '@/types/domain';
 
-export type RepositoryMode = 'APPWRITE' | 'LOCAL_FALLBACK';
+export type RepositoryMode = 'REST' | 'APPWRITE' | 'LOCAL_FALLBACK';
 export type UiDifficulty = 'Easy' | 'Medium' | 'Hard';
 export type RepositorySession = { userId: string; email?: string; displayName?: string; profilePhotoUri?: string };
 export type RepositoryAuthResult = { session: RepositorySession | null; requiresEmailConfirmation: boolean };
@@ -698,5 +700,9 @@ function titleCase(value: string) {
 }
 
 export function createZOZARRepository(): ZOZARRepository {
-  return isAppwriteConfigured() ? new AppwriteRepository() : localRepository();
+  // The ZO-ZAR API takes precedence wherever it is configured. Appwrite remains only as a
+  // fallback while the migration completes and will be removed with it.
+  if (isApiConfigured()) return createRestRepository();
+  if (isAppwriteConfigured()) return new AppwriteRepository();
+  return localRepository();
 }

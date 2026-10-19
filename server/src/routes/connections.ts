@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -60,17 +60,63 @@ function forAuthz(row: { requesterId: string; recipientId: string | null; recipi
 
 connectionRoutes.get('/', async (c) => {
   const current = session(c);
-  const rows = await getDatabase()
+  const database = getDatabase();
+  const rows = await database
     .select(COLUMNS)
     .from(schema.connections)
     .where(visibleTo(current.userId, current.email.toLowerCase()));
 
+  /**
+   * Each accepted connection carries its conversation's id.
+   *
+   * The app navigates to a chat by connection — the People list is what the user taps —
+   * while the chat API is keyed on the thread. Resolving that here rather than in the
+   * client means the mapping lives next to the rule that creates the thread, and a
+   * deep link into a conversation does not depend on the People screen having loaded
+   * first to populate a lookup.
+   */
+  const counterparts = rows
+    .filter((row) => row.status === 'accepted' && row.recipientId)
+    .map((row) => (row.requesterId === current.userId ? row.recipientId! : row.requesterId));
+
+  const threadsByCounterpart = new Map<string, string>();
+  if (counterparts.length > 0) {
+    const threads = await database
+      .select({
+        id: schema.chatThreads.id,
+        participantA: schema.chatThreads.participantA,
+        participantB: schema.chatThreads.participantB,
+      })
+      .from(schema.chatThreads)
+      .where(
+        or(
+          and(
+            eq(schema.chatThreads.participantA, current.userId),
+            inArray(schema.chatThreads.participantB, counterparts),
+          ),
+          and(
+            eq(schema.chatThreads.participantB, current.userId),
+            inArray(schema.chatThreads.participantA, counterparts),
+          ),
+        ),
+      );
+
+    for (const thread of threads) {
+      const other = thread.participantA === current.userId ? thread.participantB : thread.participantA;
+      threadsByCounterpart.set(other, thread.id);
+    }
+  }
+
   // The client needs to know which side it is on to label a row "waiting on them" versus
   // "waiting on you", and that cannot be derived from the row alone without the session.
-  const connections = rows.map((row) => ({
-    ...row,
-    relationship: row.requesterId === current.userId ? ('outgoing' as const) : ('incoming' as const),
-  }));
+  const connections = rows.map((row) => {
+    const other = row.requesterId === current.userId ? row.recipientId : row.requesterId;
+    return {
+      ...row,
+      relationship: row.requesterId === current.userId ? ('outgoing' as const) : ('incoming' as const),
+      threadId: (other && threadsByCounterpart.get(other)) ?? null,
+    };
+  });
 
   return c.json({ connections });
 });
