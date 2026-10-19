@@ -1,11 +1,42 @@
-import { useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { useMemo, useState, type ComponentType, type PropsWithChildren, type ReactNode } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import {
+  AlarmClock,
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ListChecks,
+  X,
+  Mic,
+  Plus,
+  Send,
+  ShieldCheck,
+  Sunrise,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from 'lucide-react-native';
 
 import { useAppearance, type AppearancePreference } from './appearance-provider';
-import { Fonts, type Theme } from '@/constants/theme';
+import { Touchable, minTargetStyle } from './motion';
+import { Fonts, IconSize, IconStroke, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { useZOZARStore } from './zo-zar-store';
 
 export function useZOZARTheme() {
@@ -13,8 +44,50 @@ export function useZOZARTheme() {
   return { theme, styles: useMemo(() => makeUIStyles(theme), [theme]) };
 }
 
+/**
+ * The project's icon.
+ *
+ * Icons were emoji text. Emoji are font-dependent, render differently on every Android
+ * version, cannot be coloured from a token, and have no accessible semantics — they are
+ * the single most reliable sign of an unfinished interface. Lucide draws on a 24px grid
+ * at a constant stroke, and the stroke is held constant across the whole app so the icon
+ * set reads as one family.
+ *
+ * Decorative by default: an icon sitting beside its own label is noise to a screen
+ * reader, so it is hidden unless given a label of its own.
+ */
+export function Icon({
+  as: Glyph,
+  size = IconSize.md,
+  color,
+  label,
+}: {
+  as: LucideIcon | ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  size?: number;
+  color: string;
+  /** Supply only when the icon stands alone and carries the meaning. */
+  label?: string;
+}) {
+  return (
+    <View
+      accessible={Boolean(label)}
+      accessibilityRole={label ? 'image' : undefined}
+      accessibilityLabel={label}
+      accessibilityElementsHidden={!label}
+      importantForAccessibility={label ? 'yes' : 'no-hide-descendants'}
+    >
+      <Glyph size={size} color={color} strokeWidth={IconStroke} />
+    </View>
+  );
+}
+
+/** @deprecated Emoji glyph, retained only until every screen has moved to `Icon`. */
 export function Glyph({ children, style }: { children: string; style?: object }) {
-  return <Text accessible={false} style={style}>{children}</Text>;
+  return (
+    <Text accessible={false} style={style}>
+      {children}
+    </Text>
+  );
 }
 
 const AVATAR_CHARACTERS = ['🌙', '🦉', '🦊', '🐼', '🌿', '🌞', '🌊', '🌄'] as const;
@@ -24,10 +97,364 @@ export function deterministicAvatar(seed: string) {
   return AVATAR_CHARACTERS[hash % AVATAR_CHARACTERS.length];
 }
 
-export function Screen({ children, scroll = true, bottomInset = false }: PropsWithChildren<{ scroll?: boolean; bottomInset?: boolean }>) {
+export function Screen({
+  children,
+  scroll = true,
+  bottomInset = false,
+}: PropsWithChildren<{ scroll?: boolean; bottomInset?: boolean }>) {
   const { theme, styles } = useZOZARTheme();
-  const content = scroll ? <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>{children}</ScrollView> : children;
-  return <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={bottomInset ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}>{content}</SafeAreaView>;
+  const content = scroll ? (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {children}
+    </ScrollView>
+  ) : (
+    children
+  );
+  return (
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={bottomInset ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
+    >
+      {content}
+    </SafeAreaView>
+  );
+}
+
+/**
+ * The hero time.
+ *
+ * This is the one place the design raises its voice. A wake time is the only thing on
+ * these screens that has to be legible at a glance, in the dark, by someone barely awake,
+ * so it is set enormous and tabular and given no container at all — the darkness around
+ * it does the framing. Wrapping it in a card would make it one more panel among panels.
+ */
+export function HeroTime({
+  time,
+  label,
+  detail,
+  tone = 'default',
+}: {
+  time: string;
+  label?: string;
+  detail?: string;
+  tone?: 'default' | 'accent';
+}) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <View style={styles.hero}>
+      {label ? <Text style={styles.heroLabel}>{label}</Text> : null}
+      <Text
+        style={[styles.heroTime, tone === 'accent' && { color: theme.accent }]}
+        // The clock reads as "zero six three zero" without this.
+        accessibilityLabel={`${time}`}
+        maxFontSizeMultiplier={1.4}
+      >
+        {time}
+      </Text>
+      {detail ? <Text style={styles.heroDetail}>{detail}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * A list item.
+ *
+ * Rows, not cards. Chopping a list into identical rounded cards gives every item the
+ * visual weight of a discrete object and makes a short list look like a dashboard. A row
+ * separated by a hairline says "one of several of the same kind", which is what these are.
+ */
+export function Row({
+  title,
+  detail,
+  value,
+  icon,
+  onPress,
+  trailing,
+  dimmed = false,
+  accessibilityLabel,
+}: {
+  title: string;
+  detail?: string;
+  value?: string;
+  icon?: LucideIcon;
+  onPress?: () => void;
+  trailing?: ReactNode;
+  dimmed?: boolean;
+  accessibilityLabel?: string;
+}) {
+  const { theme, styles } = useZOZARTheme();
+
+  const body = (
+    <View style={styles.listRow}>
+      {icon ? <Icon as={icon} size={IconSize.md} color={theme.subtle} /> : null}
+      <View style={styles.listCopy}>
+        <Text style={[styles.listTitle, dimmed && styles.listDone]} numberOfLines={2}>
+          {title}
+        </Text>
+        {detail ? (
+          <Text style={styles.listDetail} numberOfLines={1}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      {value ? <Text style={styles.listTime}>{value}</Text> : null}
+      {trailing}
+      {onPress && !trailing ? <Icon as={ChevronRight} size={IconSize.md} color={theme.subtle} /> : null}
+    </View>
+  );
+
+  if (!onPress) return body;
+
+  return (
+    <Touchable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
+      onPress={onPress}
+      rippleColor={theme.surfaceStrong}
+    >
+      {body}
+    </Touchable>
+  );
+}
+
+/** A quiet section label. Sentence case, normal weight: a tracked-out uppercase label
+ * above every heading is the commonest tell of generated design, and uppercase is harder
+ * to scan in the dark. */
+export function SectionLabel({ children }: { children: string }) {
+  const { styles } = useZOZARTheme();
+  return <Text style={styles.sectionLabel}>{children}</Text>;
+}
+
+export function SectionHeader({
+  kicker,
+  title,
+  action,
+  onAction,
+}: {
+  kicker?: string;
+  title: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <View style={styles.sectionHeading}>
+      <View style={styles.flexOne}>
+        {kicker ? <Text style={styles.sectionKicker}>{kicker}</Text> : null}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {action ? (
+        onAction ? (
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel={action}
+            onPress={onAction}
+            rippleColor={theme.surfaceStrong}
+            style={styles.sectionActionTarget}
+          >
+            <Text style={styles.sectionAction}>{action}</Text>
+          </Touchable>
+        ) : (
+          <Text style={styles.sectionAction}>{action}</Text>
+        )
+      ) : null}
+    </View>
+  );
+}
+
+/** A discrete object with its own actions. Not a generic container: if the content is one
+ * of several similar things, it belongs in a Row. */
+export function Card({
+  children,
+  emphasis = false,
+  style,
+}: PropsWithChildren<{ emphasis?: boolean; style?: StyleProp<ViewStyle> }>) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <View
+      style={[
+        styles.card,
+        emphasis && { backgroundColor: theme.inverseSurface, borderColor: theme.inverseSurface },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function PrimaryButton({
+  label,
+  onPress,
+  icon,
+  disabled = false,
+  busy = false,
+}: {
+  label: string;
+  onPress?: () => void;
+  icon?: LucideIcon;
+  disabled?: boolean;
+  busy?: boolean;
+}) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <Touchable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || busy, busy }}
+      disabled={disabled || busy}
+      onPress={onPress}
+      rippleColor={theme.accentContrast}
+      style={[styles.primaryButton, (disabled || busy) && styles.disabled]}
+    >
+      {busy ? (
+        <ActivityIndicator color={theme.accentContrast} />
+      ) : (
+        <>
+          {icon ? <Icon as={icon} size={IconSize.md} color={theme.accentContrast} /> : null}
+          <Text style={styles.primaryText}>{label}</Text>
+        </>
+      )}
+    </Touchable>
+  );
+}
+
+export function SecondaryButton({ label, onPress, icon }: { label: string; onPress?: () => void; icon?: LucideIcon }) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <Touchable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      rippleColor={theme.surfaceStrong}
+      style={styles.secondaryButton}
+    >
+      {icon ? <Icon as={icon} size={IconSize.md} color={theme.text} /> : null}
+      <Text style={styles.secondaryText}>{label}</Text>
+    </Touchable>
+  );
+}
+
+export function TextField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry = false,
+  error,
+  ...inputProps
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  secureTextEntry?: boolean;
+  error?: string | null;
+} & Omit<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'secureTextEntry'>) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        {...inputProps}
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.subtle}
+        secureTextEntry={secureTextEntry}
+        style={[styles.input, Boolean(error) && { borderColor: theme.error }, inputProps.style]}
+      />
+      {/* Errors sit against the field they describe, not collected at the top of the form
+          where the reader has to work out which input is wrong. */}
+      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
+    </View>
+  );
+}
+
+export function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'success' | 'warning' }) {
+  const { theme, styles } = useZOZARTheme();
+  const color = tone === 'success' ? theme.success : tone === 'warning' ? theme.warning : theme.muted;
+  const background =
+    tone === 'success' ? theme.successSurface : tone === 'warning' ? theme.warningSurface : theme.surfaceStrong;
+  return (
+    <View style={[styles.pill, { backgroundColor: background }]}>
+      <Text style={[styles.pillText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+/** An empty screen is an invitation to act, so it names the action rather than describing
+ * the absence. */
+export function EmptyState({
+  icon,
+  title,
+  detail,
+  action,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  detail: string;
+  action?: ReactNode;
+}) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <View style={styles.emptyState}>
+      {icon ? <Icon as={icon} size={IconSize.xl} color={theme.subtle} /> : null}
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyDetail}>{detail}</Text>
+      {action}
+    </View>
+  );
+}
+
+export function BackButton({ label = 'Back' }: { label?: string }) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <Touchable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={() => router.back()}
+      rippleColor={theme.surfaceStrong}
+      borderless
+      style={styles.backButton}
+    >
+      <Icon as={ArrowLeft} size={IconSize.lg} color={theme.text} />
+      <Text style={styles.backText}>{label}</Text>
+    </Touchable>
+  );
+}
+
+export function OptionRow({
+  label,
+  detail,
+  selected,
+  onPress,
+}: {
+  label: string;
+  detail?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <Touchable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      onPress={onPress}
+      rippleColor={theme.surfaceStrong}
+      style={[styles.optionRow, selected && { borderColor: theme.accent, backgroundColor: theme.backgroundSelected }]}
+    >
+      <View style={[styles.radio, selected && { borderColor: theme.accent }]}>
+        {selected ? <View style={[styles.radioDot, { backgroundColor: theme.accent }]} /> : null}
+      </View>
+      <View style={styles.optionCopy}>
+        <Text style={styles.optionLabel}>{label}</Text>
+        {detail ? <Text style={styles.optionDetail}>{detail}</Text> : null}
+      </View>
+    </Touchable>
+  );
 }
 
 export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
@@ -38,91 +465,603 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const profileName = userName || 'Your profile';
   const avatarCharacter = deterministicAvatar(profileName);
-  return <View style={styles.brandBar}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Go to home" onPress={() => router.replace('/home' as never)} style={styles.brandRow}>
-      <Image source={require('../../assets/images/zo-zar-mark-flat.png')} style={styles.brandLogo} resizeMode="contain" />
-      <Text style={styles.brand}>ZO-ZAR</Text>
-    </Pressable>
-    {showProfile && <Pressable accessibilityRole="button" accessibilityLabel="Open account settings" onPress={() => setAccountOpen(true)} style={styles.profileRow}><View style={[styles.avatar, { backgroundColor: theme.warmSurface }]}>{profilePhotoUri ? <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage} /> : <Text style={styles.avatarCharacter}>{avatarCharacter}</Text>}</View><Text numberOfLines={1} style={styles.profileName}>{profileName}</Text><Glyph style={styles.chevron}>⌄</Glyph></Pressable>}
-    <Modal visible={accountOpen} transparent animationType="fade" onRequestClose={() => setAccountOpen(false)}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close account settings" onPress={() => setAccountOpen(false)} style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} />
-      <SafeAreaView pointerEvents="box-none" style={styles.accountOverlay}>
-        <View accessibilityViewIsModal style={styles.accountSheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sectionKicker}>Account</Text>
-          <Text style={styles.accountTitle}>{profileName}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Choose profile photo" disabled={photoBusy} onPress={async () => { const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.82 }); if (!result.canceled && result.assets[0]?.uri) { setPhotoBusy(true); try { await updateProfilePhoto(result.assets[0].uri); } finally { setPhotoBusy(false); } } }} style={[styles.appearanceOption, { marginTop: 18 }]}><Text style={styles.optionLabel}>{photoBusy ? 'Uploading photo…' : profilePhotoUri ? 'Change profile photo' : 'Add profile photo'}</Text><Text style={[styles.checkText, { color: theme.accent }]}>＋</Text></Pressable>
-          <Text style={styles.cardDetail}>Choose how ZO-ZAR looks on this device.</Text>
-          <View accessibilityRole="radiogroup" style={styles.appearanceGroup}>
-            {(['system', 'light', 'dark'] as AppearancePreference[]).map((option) => <Pressable key={option} accessibilityRole="radio" accessibilityState={{ checked: preference === option }} onPress={() => void setPreference(option)} style={[styles.appearanceOption, preference === option && { borderColor: theme.accent, backgroundColor: theme.backgroundSelected }]}><Text style={styles.optionLabel}>{option[0].toUpperCase() + option.slice(1)}</Text>{preference === option && <Text style={[styles.checkText, { color: theme.accent }]}>✓</Text>}</Pressable>)}
+
+  return (
+    <View style={styles.brandBar}>
+      <Touchable
+        accessibilityRole="button"
+        accessibilityLabel="Go to home"
+        onPress={() => router.replace('/home' as never)}
+        rippleColor={theme.surfaceStrong}
+        borderless
+        style={styles.brandRow}
+      >
+        <Image source={require('../../assets/images/zo-zar-mark-flat.png')} style={styles.brandLogo} resizeMode="contain" />
+        <Text style={styles.brand}>ZO-ZAR</Text>
+      </Touchable>
+
+      {showProfile ? (
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel="Open account settings"
+          onPress={() => setAccountOpen(true)}
+          rippleColor={theme.surfaceStrong}
+          style={styles.profileRow}
+        >
+          <View style={[styles.avatar, { backgroundColor: theme.warmSurface }]}>
+            {profilePhotoUri ? (
+              <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarCharacter}>{avatarCharacter}</Text>
+            )}
           </View>
-          <SecondaryButton label="Close" onPress={() => setAccountOpen(false)} />
-          <Pressable accessibilityRole="button" onPress={async () => { setAccountOpen(false); await signOut(); router.replace('/sign-in' as never); }} style={styles.signOutButton}><Text style={[styles.secondaryText, { color: theme.error }]}>Sign out</Text></Pressable>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  </View>;
+          <Text numberOfLines={1} style={styles.profileName}>
+            {profileName}
+          </Text>
+          <Icon as={ChevronDown} size={IconSize.sm} color={theme.subtle} />
+        </Touchable>
+      ) : null}
+
+      <Modal visible={accountOpen} transparent animationType="fade" onRequestClose={() => setAccountOpen(false)}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close account settings"
+          onPress={() => setAccountOpen(false)}
+          style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]}
+        />
+        <SafeAreaView pointerEvents="box-none" style={styles.accountOverlay}>
+          <View accessibilityViewIsModal style={styles.accountSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.accountTitle}>{profileName}</Text>
+            <Text style={styles.cardDetail}>Choose how ZO-ZAR looks on this device.</Text>
+
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel="Choose profile photo"
+              disabled={photoBusy}
+              rippleColor={theme.surfaceStrong}
+              onPress={async () => {
+                const result = await ImagePicker.launchImageLibraryAsync({
+                  mediaTypes: ['images'],
+                  allowsEditing: true,
+                  aspect: [1, 1],
+                  quality: 0.82,
+                });
+                if (!result.canceled && result.assets[0]?.uri) {
+                  setPhotoBusy(true);
+                  try {
+                    await updateProfilePhoto(result.assets[0].uri);
+                  } finally {
+                    setPhotoBusy(false);
+                  }
+                }
+              }}
+              style={[styles.appearanceOption, { marginTop: Spacing.lg }]}
+            >
+              <Text style={styles.optionLabel}>
+                {photoBusy ? 'Uploading photo' : profilePhotoUri ? 'Change profile photo' : 'Add profile photo'}
+              </Text>
+              <Icon as={Plus} size={IconSize.md} color={theme.accent} />
+            </Touchable>
+
+            <View accessibilityRole="radiogroup" style={styles.appearanceGroup}>
+              {(['system', 'light', 'dark'] as AppearancePreference[]).map((option) => (
+                <Touchable
+                  key={option}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: preference === option }}
+                  accessibilityLabel={option}
+                  onPress={() => void setPreference(option)}
+                  rippleColor={theme.surfaceStrong}
+                  style={[
+                    styles.appearanceOption,
+                    preference === option && { borderColor: theme.accent, backgroundColor: theme.backgroundSelected },
+                  ]}
+                >
+                  <Text style={styles.optionLabel}>{option[0]!.toUpperCase() + option.slice(1)}</Text>
+                  {preference === option ? <Icon as={Check} size={IconSize.md} color={theme.accent} /> : null}
+                </Touchable>
+              ))}
+            </View>
+
+            <SecondaryButton label="Close" onPress={() => setAccountOpen(false)} />
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+              rippleColor={theme.errorSurface}
+              onPress={async () => {
+                setAccountOpen(false);
+                await signOut();
+                router.replace('/sign-in' as never);
+              }}
+              style={styles.signOutButton}
+            >
+              <Text style={[styles.secondaryText, { color: theme.error }]}>Sign out</Text>
+            </Touchable>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </View>
+  );
 }
 
-export function SectionHeader({ kicker, title, action, onAction }: { kicker?: string; title: string; action?: string; onAction?: () => void }) {
-  const { styles } = useZOZARTheme();
-  return <View style={styles.sectionHeading}><View>{kicker && <Text style={styles.sectionKicker}>{kicker}</Text>}<Text style={styles.sectionTitle}>{title}</Text></View>{action && (onAction ? <Pressable accessibilityRole="button" onPress={onAction} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.sectionAction}>{action}</Text></Pressable> : <Text style={styles.sectionAction}>{action}</Text>)}</View>;
-}
-
-export function Card({ children, emphasis = false, style }: PropsWithChildren<{ emphasis?: boolean; style?: object }>) {
-  const { theme, styles } = useZOZARTheme();
-  return <View style={[styles.card, emphasis && { backgroundColor: theme.inverseSurface, borderColor: theme.inverseSurface }, style]}>{children}</View>;
-}
-
-export function PrimaryButton({ label, onPress, icon, disabled = false, busy = false }: { label: string; onPress?: () => void; icon?: string; disabled?: boolean; busy?: boolean }) {
-  const { theme, styles } = useZOZARTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || busy, busy }} disabled={disabled || busy} onPress={onPress} style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.accent }, (disabled || busy) && styles.disabled, pressed && styles.pressed]}>{busy ? <ActivityIndicator color={theme.accentContrast} /> : <>{icon && <Glyph style={[styles.primaryGlyph, { color: theme.accentContrast }]}>{icon}</Glyph>}<Text style={[styles.primaryText, { color: theme.accentContrast }]}>{label}</Text></>}</Pressable>;
-}
-
-export function SecondaryButton({ label, onPress, icon }: { label: string; onPress?: () => void; icon?: string }) {
-  const { styles } = useZOZARTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>{icon && <Glyph style={styles.secondaryGlyph}>{icon}</Glyph>}<Text style={styles.secondaryText}>{label}</Text></Pressable>;
-}
-
-export function TextField({ label, value, onChangeText, placeholder, secureTextEntry = false, ...inputProps }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; secureTextEntry?: boolean } & Omit<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'secureTextEntry'>) {
-  const { theme, styles } = useZOZARTheme();
-  return <View style={styles.field}><Text style={styles.fieldLabel}>{label}</Text><TextInput {...inputProps} accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={theme.subtle} secureTextEntry={secureTextEntry} style={[styles.input, inputProps.style]} /></View>;
-}
-
-export function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'success' | 'warning' }) {
-  const { theme, styles } = useZOZARTheme();
-  const color = tone === 'success' ? theme.success : tone === 'warning' ? theme.warning : theme.muted;
-  return <View style={[styles.pill, { backgroundColor: tone === 'success' ? theme.successSurface : tone === 'warning' ? theme.warningSurface : theme.surfaceStrong }]}><Text style={[styles.pillText, { color }]}>{label}</Text></View>;
-}
-
-export function EmptyState({ icon, title, detail, action }: { icon: string; title: string; detail: string; action?: ReactNode }) {
-  const { styles } = useZOZARTheme();
-  return <Card style={styles.emptyState}><Text style={styles.emptyIcon}>{icon}</Text><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyDetail}>{detail}</Text>{action}</Card>;
-}
-
-export function BackButton({ label = 'Back' }: { label?: string }) {
-  const { styles } = useZOZARTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => router.back()} style={styles.backButton}><Glyph style={styles.backGlyph}>←</Glyph><Text style={styles.backText}>{label}</Text></Pressable>;
-}
-
-export function OptionRow({ label, detail, selected, onPress }: { label: string; detail?: string; selected: boolean; onPress: () => void }) {
-  const { theme, styles } = useZOZARTheme();
-  return <Pressable accessibilityRole="radio" accessibilityState={{ selected }} onPress={onPress} style={[styles.optionRow, selected && { borderColor: theme.text, backgroundColor: theme.surfaceStrong }]}><View style={[styles.radio, selected && { borderColor: theme.text }]}>{selected && <View style={[styles.radioDot, { backgroundColor: theme.text }]} />}</View><View style={styles.optionCopy}><Text style={styles.optionLabel}>{label}</Text>{detail && <Text style={styles.optionDetail}>{detail}</Text>}</View></Pressable>;
-}
+/** Icons used by screens, re-exported so a screen imports one module rather than reaching
+ * into the icon library directly and drifting from the set. */
+export const Icons = {
+  alarm: AlarmClock,
+  close: X,
+  listChecks: ListChecks,
+  sun: Sunrise,
+  userPlus: UserPlus,
+  users: Users,
+  back: ArrowLeft,
+  check: Check,
+  chevronDown: ChevronDown,
+  chevronRight: ChevronRight,
+  mic: Mic,
+  plus: Plus,
+  send: Send,
+  shield: ShieldCheck,
+} as const;
 
 function makeUIStyles(theme: Theme) {
+  const hairline = StyleSheet.hairlineWidth;
+
   return StyleSheet.create({
-    safeArea: { flex: 1 }, flex: { flex: 1 }, scrollContent: { paddingHorizontal: 20, paddingBottom: 36, width: '100%', maxWidth: 720, alignSelf: 'center' },
-    brandBar: { minHeight: 68, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, brandRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 }, brandLogo: { width: 30, height: 30, borderRadius: 9 }, brand: { color: theme.text, fontFamily: Fonts.bold, fontSize: 15, fontWeight: '700', letterSpacing: 2.5 }, profileRow: { minHeight: 48, maxWidth: '55%', flexDirection: 'row', alignItems: 'center', gap: 8 }, avatar: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, avatarImage: { width: '100%', height: '100%' }, avatarCharacter: { fontSize: 20, lineHeight: 24 }, profileName: { flexShrink: 1, color: theme.text, fontFamily: Fonts.medium, fontSize: 13, fontWeight: '500' }, chevron: { color: theme.muted, fontSize: 18 },
-    intro: { paddingTop: 28, paddingBottom: 24 }, eyebrow: { color: theme.warm, fontFamily: Fonts.semibold, fontSize: 13, marginBottom: 10 }, pageTitle: { color: theme.text, fontFamily: Fonts.bold, fontSize: 36, lineHeight: 42, fontWeight: '700', letterSpacing: -1.2 }, lede: { color: theme.muted, fontFamily: Fonts.regular, fontSize: 16, lineHeight: 24, marginTop: 8 }, sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }, sectionKicker: { color: theme.warm, fontFamily: Fonts.semibold, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 6 }, sectionTitle: { color: theme.text, fontFamily: Fonts.bold, fontSize: 22, lineHeight: 27, fontWeight: '700', letterSpacing: -0.4 }, sectionAction: { color: theme.muted, fontFamily: Fonts.medium, fontSize: 13, fontWeight: '600', marginTop: 10 },
-    card: { borderWidth: 1, borderColor: theme.line, borderRadius: 20, backgroundColor: theme.surface, padding: 18, marginBottom: 14 }, cardTitle: { color: theme.text, fontFamily: Fonts.semibold, fontSize: 17, lineHeight: 22, fontWeight: '700' }, cardDetail: { color: theme.muted, fontFamily: Fonts.regular, fontSize: 14, lineHeight: 21, marginTop: 5 }, primaryButton: { minHeight: 50, borderRadius: 15, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, primaryText: { fontFamily: Fonts.semibold, fontSize: 15, fontWeight: '700' }, primaryGlyph: { fontSize: 19, lineHeight: 20 }, secondaryButton: { minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: theme.lineStrong, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: theme.surface }, secondaryText: { color: theme.text, fontFamily: Fonts.semibold, fontSize: 14, fontWeight: '600' }, secondaryGlyph: { color: theme.text, fontSize: 18 }, pressed: { opacity: 0.7 }, disabled: { opacity: 0.42 },
-    field: { gap: 7, marginBottom: 14 }, fieldLabel: { color: theme.muted, fontFamily: Fonts.medium, fontSize: 13, fontWeight: '600' }, input: { minHeight: 50, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 14, paddingHorizontal: 15, color: theme.text, backgroundColor: theme.surface, fontFamily: Fonts.regular, fontSize: 16 }, pill: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }, pillText: { fontFamily: Fonts.semibold, fontSize: 12, fontWeight: '700' }, emptyState: { alignItems: 'center', paddingVertical: 30 }, emptyIcon: { color: theme.warm, fontSize: 28, marginBottom: 10 }, emptyTitle: { color: theme.text, fontFamily: Fonts.semibold, fontSize: 17, fontWeight: '700', textAlign: 'center' }, emptyDetail: { color: theme.muted, fontFamily: Fonts.regular, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 6, marginBottom: 17, maxWidth: 300 },
-    accountOverlay: { flex: 1, justifyContent: 'flex-end' }, accountSheet: { backgroundColor: theme.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: theme.line, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 }, sheetHandle: { width: 42, height: 5, borderRadius: 3, backgroundColor: theme.lineStrong, alignSelf: 'center', marginBottom: 22 }, accountTitle: { color: theme.text, fontFamily: Fonts.bold, fontSize: 27, lineHeight: 33, fontWeight: '700' }, appearanceGroup: { gap: 8, marginVertical: 22 }, appearanceOption: { minHeight: 50, borderRadius: 14, borderWidth: 1, borderColor: theme.line, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, signOutButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-    bottomTabs: { position: 'absolute', bottom: 0, left: 0, right: 0, minHeight: 76, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line, backgroundColor: theme.background, flexDirection: 'row', justifyContent: 'space-around', paddingTop: 8, paddingBottom: 10 }, tab: { minWidth: 60, alignItems: 'center', justifyContent: 'center', gap: 3 }, tabIcon: { color: theme.subtle, fontSize: 20, lineHeight: 22 }, tabIconActive: { color: theme.text }, tabLabel: { color: theme.subtle, fontSize: 11 }, tabLabelActive: { color: theme.text, fontWeight: '700' }, backButton: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, alignSelf: 'flex-start' }, backGlyph: { color: theme.text, fontSize: 20 }, backText: { color: theme.text, fontSize: 14, fontWeight: '600' }, optionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: theme.line, borderRadius: 10, padding: 14, marginBottom: 9 }, radio: { width: 20, height: 20, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 10, justifyContent: 'center', alignItems: 'center' }, radioDot: { width: 10, height: 10, borderRadius: 5 }, optionCopy: { flex: 1, gap: 3 }, optionLabel: { color: theme.text, fontSize: 14, fontWeight: '700' }, optionDetail: { color: theme.muted, fontSize: 12, lineHeight: 17 },
-    buttonRow: { flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 18 }, composer: { marginBottom: 22 }, composerFields: { marginTop: 15 }, spacerSection: { marginTop: 30 }, inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 12 }, list: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }, listRow: { minHeight: 70, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.line, flexDirection: 'row', alignItems: 'center', gap: 12 }, listCopy: { flex: 1, gap: 4 }, listTitle: { color: theme.text, fontSize: 14, fontWeight: '700' }, listDone: { color: theme.subtle, textDecorationLine: 'line-through' }, listDetail: { color: theme.muted, fontSize: 12 }, listTime: { color: theme.muted, fontFamily: 'monospace', fontSize: 12 }, rowChevron: { color: theme.muted, fontSize: 22, lineHeight: 20 }, check: { width: 21, height: 21, borderRadius: 11, borderWidth: 1, borderColor: theme.lineStrong, alignItems: 'center', justifyContent: 'center' }, checkDone: { backgroundColor: theme.success, borderColor: theme.success }, checkText: { color: theme.inverseText, fontSize: 12, fontWeight: '800' }, heroCard: { padding: 0, flexDirection: 'row', overflow: 'hidden', marginBottom: 28 }, heroCopy: { flex: 1, padding: 18, gap: 16 }, kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 7 }, statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.success }, inverseKicker: { color: theme.inverseTextSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }, heroTitle: { color: theme.inverseText, fontSize: 25, lineHeight: 30, fontWeight: '700', letterSpacing: -0.8 }, heroDetail: { color: theme.inverseTextSecondary, fontSize: 13 }, heroActions: { gap: 10 }, inverseLink: { color: theme.inverseText, fontSize: 13, fontWeight: '700' }, protectedText: { color: theme.inverseTextSecondary, fontSize: 12 }, heroTime: { width: 102, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: theme.inverseLine, justifyContent: 'center', alignItems: 'center', padding: 12 }, heroTimeLabel: { color: theme.inverseTextSecondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }, heroTimeValue: { color: theme.inverseText, fontSize: 37, lineHeight: 42, fontWeight: '600', letterSpacing: -2 }, iconBox: { width: 38, height: 38, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, iconText: { color: theme.text, fontSize: 23 }, divider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.line, marginVertical: 14 }, actionRow: { minHeight: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, actionText: { color: theme.text, fontSize: 13, fontWeight: '700' }, actionArrow: { color: theme.text, fontSize: 18 }, personAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: theme.surfaceStrong, alignItems: 'center', justifyContent: 'center' }, personAvatarText: { color: theme.text, fontSize: 12, fontWeight: '700' }, helperGlyph: { color: theme.success, fontSize: 18 }, helperText: { color: theme.muted, fontSize: 12, lineHeight: 18, marginTop: 13 }, linkedWake: { color: theme.muted, fontSize: 12, marginTop: 14 }, commitmentCard: { paddingVertical: 15 }, permissionCaption: { color: theme.muted, fontSize: 12, marginTop: 14, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }, flexOne: { flex: 1 }, actionPair: { flexDirection: 'row', gap: 9, marginBottom: 26 }, wakeHero: { padding: 19, marginBottom: 15 }, wakeHeroTime: { color: theme.inverseText, fontSize: 54, lineHeight: 60, fontWeight: '600', letterSpacing: -3, marginTop: 14 }, wakeHeroDetail: { color: theme.inverseTextSecondary, fontSize: 13 }, heroDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.inverseLine, marginVertical: 17 }, inverseIcon: { color: theme.inverseText, fontSize: 20 }, inverseCardTitle: { color: theme.inverseText, fontSize: 13, fontWeight: '700' }, inverseCardDetail: { color: theme.inverseTextSecondary, fontSize: 12, lineHeight: 18, marginTop: 3 }, permissionStatus: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 15 }, successDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: theme.success },
-    authTop: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingTop: 20, marginBottom: 62 }, authMark: { width: 28, height: 28, borderWidth: 2, borderColor: theme.text, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, authHand: { width: 8, height: 2, backgroundColor: theme.text, transform: [{ rotate: '35deg' }], marginLeft: 4 }, authBrand: { color: theme.text, fontSize: 17, fontWeight: '700' }, authIntro: { marginBottom: 28 }, authTitle: { color: theme.text, fontSize: 32, lineHeight: 37, fontWeight: '700', letterSpacing: -1.3 }, authDetail: { color: theme.muted, fontSize: 15, lineHeight: 22, marginTop: 9 }, authLink: { paddingVertical: 18, alignItems: 'center' }, authLinkText: { color: theme.muted, fontSize: 13 }, authLinkStrong: { color: theme.text, fontWeight: '700' }, authNote: { marginTop: 36, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line, paddingTop: 18 }, authNoteTitle: { color: theme.text, fontSize: 13, fontWeight: '700' }, authNoteText: { color: theme.muted, fontSize: 12, lineHeight: 18, marginTop: 5 }, onboardingHeader: { paddingTop: 34, marginBottom: 20 }, permissionNotice: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: theme.surfaceStrong }, permissionNoticeIcon: { color: theme.success, fontSize: 23 }, permissionNoticeCopy: { flex: 1 }, permissionList: { marginBottom: 13 }, permissionCard: { flexDirection: 'row', gap: 13, padding: 14 }, permissionNumber: { width: 26, height: 26, borderRadius: 13, backgroundColor: theme.surfaceStrong, alignItems: 'center', justifyContent: 'center' }, permissionNumberText: { color: theme.text, fontSize: 12, fontWeight: '700' }, permissionCopy: { flex: 1 }, permissionAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }, permissionActionText: { color: theme.text, fontSize: 12, fontWeight: '700' }, permissionArrow: { color: theme.text, fontSize: 18 }, skipButton: { paddingVertical: 18, alignItems: 'center' }, skipText: { color: theme.muted, fontSize: 13 },
-    circleHero: { padding: 19, marginBottom: 27 }, circleHeroTitle: { color: theme.inverseText, fontSize: 22, lineHeight: 28, fontWeight: '700', marginTop: 13, marginBottom: 6 },
-    chatHeader: { minHeight: 68, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.line, flexDirection: 'row', alignItems: 'center', gap: 10 }, chatHeaderIcon: { color: theme.muted, fontSize: 22, marginLeft: 'auto' }, chatName: { color: theme.text, fontSize: 14, fontWeight: '700' }, chatStatus: { color: theme.muted, fontSize: 12, marginTop: 2 }, chatPrivacy: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.surface }, chatPrivacyText: { color: theme.muted, fontSize: 11 }, chatMessages: { flex: 1, padding: 16, justifyContent: 'flex-end' }, messageRow: { alignItems: 'flex-start', marginBottom: 10 }, messageRowMe: { alignItems: 'flex-end' }, messageBubble: { maxWidth: '82%', borderRadius: 14, paddingHorizontal: 13, paddingTop: 10, paddingBottom: 8 }, messageText: { fontSize: 14, lineHeight: 20 }, messageTime: { fontSize: 10, marginTop: 5 }, voiceBubble: { flexDirection: 'row', alignItems: 'center', gap: 9 }, voiceIcon: { fontSize: 14 }, voiceText: { fontSize: 13, fontWeight: '600' }, voiceShell: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line, paddingHorizontal: 18, paddingTop: 11, paddingBottom: 5 }, voiceShellText: { color: theme.muted, fontSize: 11, lineHeight: 16 }, composerBar: { minHeight: 62, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 9 }, recordButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: theme.surfaceStrong, alignItems: 'center', justifyContent: 'center' }, recordIcon: { color: theme.text, fontSize: 16 }, chatInput: { flex: 1, minHeight: 42, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 21, paddingHorizontal: 15, color: theme.text, fontSize: 14 }, sendButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: theme.text, alignItems: 'center', justifyContent: 'center' }, sendGlyph: { color: theme.background, fontSize: 20 },
-    wakeConfirmTop: { alignItems: 'center', paddingTop: 31, paddingBottom: 29 }, alarmRing: { width: 64, height: 64, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }, alarmIcon: { color: theme.text, fontSize: 31 }, wakeConfirmTitle: { color: theme.text, fontSize: 30, lineHeight: 35, fontWeight: '700', letterSpacing: -1, textAlign: 'center', marginTop: 8 }, wakeConfirmDetail: { color: theme.muted, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 8, maxWidth: 310 }, taskCard: { padding: 19 }, taskHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, taskDifficulty: { color: theme.text, fontSize: 12, fontWeight: '700' }, taskPrompt: { color: theme.text, fontSize: 21, lineHeight: 28, fontWeight: '700', marginTop: 22, marginBottom: 18 }, taskChoice: { minHeight: 54, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 13 }, taskChoiceText: { color: theme.text, fontSize: 16, fontWeight: '700' }, successCard: { alignItems: 'center', padding: 24, gap: 13 }, successIcon: { color: theme.success, fontSize: 42, fontWeight: '500' }, wakeConfirmNote: { flexDirection: 'row', gap: 8, marginTop: 19, paddingHorizontal: 7 },
+    safeArea: { flex: 1 },
+    flex: { flex: 1 },
+    flexOne: { flex: 1 },
+    scrollContent: {
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xxxl,
+      width: '100%',
+      maxWidth: 720,
+      alignSelf: 'center',
+    },
+
+    // Chrome stays quiet: it is navigation, not content.
+    brandBar: { minHeight: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    brandRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingRight: Spacing.sm },
+    brandLogo: { width: 26, height: 26, borderRadius: Radius.tight },
+    brand: { ...Type.label, color: theme.textSecondary, letterSpacing: 1.6 },
+    profileRow: {
+      minHeight: 48,
+      maxWidth: '55%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingLeft: Spacing.sm,
+    },
+    avatar: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    avatarImage: { width: '100%', height: '100%' },
+    avatarCharacter: { fontSize: 16, lineHeight: 20 },
+    profileName: { ...Type.caption, flexShrink: 1, color: theme.textSecondary },
+    chevron: { color: theme.subtle, fontSize: 16 },
+
+    // The hero. No container, maximum scale contrast.
+    hero: { paddingTop: Spacing.xxl, paddingBottom: Spacing.xl },
+    heroLabel: { ...Type.label, color: theme.textSecondary, marginBottom: Spacing.sm },
+    heroTime: { ...Type.clock, color: theme.text },
+    heroDetail: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm },
+
+    intro: { paddingTop: Spacing.xl, paddingBottom: Spacing.lg },
+    eyebrow: { ...Type.label, color: theme.textSecondary, marginBottom: Spacing.sm },
+    pageTitle: { ...Type.title, color: theme.text },
+    lede: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm },
+
+    sectionLabel: { ...Type.label, color: theme.textSecondary, marginBottom: Spacing.md },
+    sectionHeading: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.md,
+      marginBottom: Spacing.md,
+      marginTop: Spacing.xl,
+    },
+    sectionKicker: { ...Type.label, color: theme.textSecondary, marginBottom: Spacing.xs },
+    sectionTitle: { ...Type.heading, color: theme.text },
+    sectionAction: { ...Type.callout, color: theme.accent },
+    sectionActionTarget: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Spacing.sm },
+
+    card: {
+      borderWidth: hairline,
+      borderColor: theme.line,
+      borderRadius: Radius.card,
+      backgroundColor: theme.surface,
+      padding: Spacing.xl,
+      marginBottom: Spacing.md,
+    },
+    cardTitle: { ...Type.heading, color: theme.text },
+    cardDetail: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm },
+
+    primaryButton: {
+      minHeight: 52,
+      borderRadius: Radius.row,
+      paddingHorizontal: Spacing.xl,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.sm,
+      backgroundColor: theme.accent,
+      overflow: 'hidden',
+    },
+    primaryText: { ...Type.action, color: theme.accentContrast },
+    primaryGlyph: { color: theme.accentContrast, fontSize: 18 },
+    secondaryButton: {
+      minHeight: 52,
+      borderRadius: Radius.row,
+      borderWidth: hairline,
+      borderColor: theme.lineStrong,
+      paddingHorizontal: Spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.sm,
+      overflow: 'hidden',
+    },
+    secondaryText: { ...Type.action, color: theme.text },
+    secondaryGlyph: { color: theme.text, fontSize: 18 },
+    pressed: { opacity: 0.72 },
+    disabled: { opacity: 0.4 },
+
+    field: { gap: Spacing.sm, marginBottom: Spacing.lg },
+    fieldLabel: { ...Type.label, color: theme.textSecondary },
+    fieldError: { ...Type.caption, color: theme.error },
+    input: {
+      minHeight: 52,
+      borderWidth: hairline,
+      borderColor: theme.lineStrong,
+      borderRadius: Radius.row,
+      paddingHorizontal: Spacing.lg,
+      color: theme.text,
+      backgroundColor: theme.surface,
+      ...Type.body,
+    },
+
+    pill: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+    pillText: { ...Type.caption, fontFamily: Fonts.medium },
+
+    emptyState: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.md },
+    emptyIcon: { color: theme.subtle, fontSize: 28 },
+    emptyTitle: { ...Type.heading, color: theme.text, textAlign: 'center' },
+    emptyDetail: { ...Type.body, color: theme.textSecondary, textAlign: 'center', maxWidth: 300 },
+
+    accountOverlay: { flex: 1, justifyContent: 'flex-end' },
+    accountSheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: Radius.sheet,
+      borderTopRightRadius: Radius.sheet,
+      borderWidth: hairline,
+      borderColor: theme.line,
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xl,
+    },
+    sheetHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.lineStrong,
+      alignSelf: 'center',
+      marginBottom: Spacing.xl,
+    },
+    accountTitle: { ...Type.title, color: theme.text },
+    appearanceGroup: { gap: Spacing.sm, marginVertical: Spacing.xl },
+    appearanceOption: {
+      minHeight: 52,
+      borderRadius: Radius.row,
+      borderWidth: hairline,
+      borderColor: theme.line,
+      paddingHorizontal: Spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      overflow: 'hidden',
+    },
+    signOutButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm },
+
+    bottomTabs: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      minHeight: 72,
+      borderTopWidth: hairline,
+      borderTopColor: theme.line,
+      backgroundColor: theme.background,
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.md,
+    },
+    tab: { minWidth: 60, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: Spacing.xs },
+    tabIcon: { color: theme.subtle, fontSize: 20 },
+    tabIconActive: { color: theme.accent },
+    tabLabel: { ...Type.caption, fontSize: 11, color: theme.subtle },
+    tabLabelActive: { color: theme.text },
+
+    backButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, minHeight: 48, alignSelf: 'flex-start' },
+    backGlyph: { color: theme.text, fontSize: 20 },
+    backText: { ...Type.action, color: theme.text },
+
+    optionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      borderWidth: hairline,
+      borderColor: theme.line,
+      borderRadius: Radius.row,
+      padding: Spacing.lg,
+      marginBottom: Spacing.sm,
+      overflow: 'hidden',
+    },
+    radio: {
+      width: 20,
+      height: 20,
+      borderWidth: 1.5,
+      borderColor: theme.lineStrong,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    radioDot: { width: 10, height: 10, borderRadius: 5 },
+    optionCopy: { flex: 1, gap: Spacing.xs },
+    optionLabel: { ...Type.callout, color: theme.text },
+    optionDetail: { ...Type.caption, color: theme.textSecondary },
+
+    buttonRow: { flexDirection: 'row', justifyContent: 'flex-start', marginBottom: Spacing.lg },
+    composer: { marginBottom: Spacing.xl },
+    composerFields: { marginTop: Spacing.lg },
+    spacerSection: { marginTop: Spacing.xxl },
+    inlineRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+
+    list: { borderTopWidth: hairline, borderTopColor: theme.line },
+    listRow: {
+      minHeight: 64,
+      borderBottomWidth: hairline,
+      borderBottomColor: theme.line,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+    },
+    listCopy: { flex: 1, gap: 2 },
+    listTitle: { ...Type.callout, color: theme.text },
+    listDone: { color: theme.subtle, textDecorationLine: 'line-through' },
+    listDetail: { ...Type.caption, color: theme.textSecondary },
+    listTime: { ...Type.clockRow, color: theme.textSecondary },
+    rowChevron: { color: theme.subtle, fontSize: 20 },
+
+    check: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme.lineStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkDone: { backgroundColor: theme.success, borderColor: theme.success },
+    checkText: { color: theme.accentContrast, fontSize: 12 },
+
+    heroCard: { padding: 0, overflow: 'hidden', marginBottom: Spacing.xl },
+    heroCopy: { flex: 1, padding: Spacing.xl, gap: Spacing.lg },
+    kickerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.success },
+    inverseKicker: { ...Type.label, color: theme.inverseTextSecondary },
+    heroTitle: { ...Type.heading, color: theme.inverseText },
+    heroTimeLabel: { ...Type.caption, color: theme.textSecondary },
+    heroTimeValue: { ...Type.clockSmall, color: theme.text },
+    inverseLink: { ...Type.action, color: theme.inverseText },
+    protectedText: { ...Type.caption, color: theme.inverseTextSecondary },
+    heroActions: { gap: Spacing.sm },
+
+    iconBox: {
+      width: 40,
+      height: 40,
+      borderWidth: hairline,
+      borderColor: theme.lineStrong,
+      borderRadius: Radius.tight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    iconText: { color: theme.text, fontSize: 20 },
+    divider: { height: hairline, backgroundColor: theme.line, marginVertical: Spacing.lg },
+    actionRow: { minHeight: 48, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    actionText: { ...Type.action, color: theme.text },
+    actionArrow: { color: theme.subtle, fontSize: 18 },
+
+    personAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.surfaceStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    personAvatarText: { ...Type.callout, color: theme.text },
+
+    helperGlyph: { color: theme.success, fontSize: 18 },
+    helperText: { ...Type.caption, color: theme.textSecondary, marginTop: Spacing.md },
+    linkedWake: { ...Type.caption, color: theme.textSecondary, marginTop: Spacing.md },
+    commitmentCard: { paddingVertical: Spacing.lg },
+    permissionCaption: {
+      ...Type.caption,
+      color: theme.textSecondary,
+      marginTop: Spacing.md,
+      paddingTop: Spacing.md,
+      borderTopWidth: hairline,
+      borderTopColor: theme.line,
+    },
+    actionPair: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xl },
+
+    wakeHero: { padding: Spacing.xl, marginBottom: Spacing.lg },
+    wakeHeroTime: { ...Type.clock, color: theme.text, marginTop: Spacing.md },
+    wakeHeroDetail: { ...Type.body, color: theme.textSecondary },
+    heroDivider: { height: hairline, backgroundColor: theme.line, marginVertical: Spacing.lg },
+    inverseIcon: { color: theme.inverseText, fontSize: 20 },
+    inverseCardTitle: { ...Type.callout, color: theme.inverseText },
+    inverseCardDetail: { ...Type.caption, color: theme.inverseTextSecondary, marginTop: Spacing.xs },
+    permissionStatus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.lg },
+    successDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.success },
+
+    authTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingTop: Spacing.xl, marginBottom: Spacing.huge },
+    authMark: {
+      width: 28,
+      height: 28,
+      borderWidth: 2,
+      borderColor: theme.text,
+      borderRadius: Radius.tight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    authHand: { width: 8, height: 2, backgroundColor: theme.text, transform: [{ rotate: '35deg' }], marginLeft: 4 },
+    authBrand: { ...Type.heading, color: theme.text },
+    authIntro: { marginBottom: Spacing.xl },
+    authTitle: { ...Type.title, color: theme.text },
+    authDetail: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm },
+    authLink: { paddingVertical: Spacing.lg, alignItems: 'center', minHeight: 48 },
+    authLinkText: { ...Type.callout, color: theme.textSecondary },
+    authLinkStrong: { color: theme.accent, fontFamily: Fonts.semibold },
+    authNote: { marginTop: Spacing.xxl, borderTopWidth: hairline, borderTopColor: theme.line, paddingTop: Spacing.lg },
+    authNoteTitle: { ...Type.callout, color: theme.text },
+    authNoteText: { ...Type.caption, color: theme.textSecondary, marginTop: Spacing.xs },
+
+    onboardingHeader: { paddingTop: Spacing.xxl, marginBottom: Spacing.lg },
+    permissionNotice: { flexDirection: 'row', gap: Spacing.md, alignItems: 'flex-start', backgroundColor: theme.surfaceStrong },
+    permissionNoticeIcon: { color: theme.success, fontSize: 22 },
+    permissionNoticeCopy: { flex: 1 },
+    permissionList: { marginBottom: Spacing.md },
+    permissionCard: { flexDirection: 'row', gap: Spacing.md, padding: Spacing.lg },
+    permissionNumber: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: theme.surfaceStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    permissionNumberText: { ...Type.caption, color: theme.text },
+    permissionCopy: { flex: 1 },
+    permissionAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.md, minHeight: 48 },
+    permissionActionText: { ...Type.action, color: theme.accent },
+    permissionArrow: { color: theme.accent, fontSize: 18 },
+    skipButton: { paddingVertical: Spacing.lg, alignItems: 'center', minHeight: 48 },
+    skipText: { ...Type.callout, color: theme.textSecondary },
+
+    circleHero: { padding: Spacing.xl, marginBottom: Spacing.xl },
+    circleHeroTitle: { ...Type.heading, color: theme.inverseText, marginTop: Spacing.md, marginBottom: Spacing.sm },
+
+    chatHeader: {
+      minHeight: 64,
+      paddingHorizontal: Spacing.lg,
+      borderBottomWidth: hairline,
+      borderBottomColor: theme.line,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+    },
+    chatHeaderIcon: { color: theme.subtle, fontSize: 20, marginLeft: 'auto' },
+    chatName: { ...Type.callout, color: theme.text },
+    chatStatus: { ...Type.caption, color: theme.textSecondary, marginTop: 2 },
+    chatPrivacy: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.md,
+    },
+    chatPrivacyText: { ...Type.caption, color: theme.subtle },
+    chatMessages: { flex: 1, padding: Spacing.lg, justifyContent: 'flex-end' },
+    messageRow: { alignItems: 'flex-start', marginBottom: Spacing.sm },
+    messageRowMe: { alignItems: 'flex-end' },
+    messageBubble: { maxWidth: '82%', borderRadius: Radius.card, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+    messageText: { ...Type.body },
+    messageTime: { ...Type.caption, fontSize: 11, marginTop: Spacing.xs },
+    voiceBubble: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    voiceIcon: { fontSize: 14 },
+    voiceText: { ...Type.caption },
+    voiceShell: {
+      borderTopWidth: hairline,
+      borderTopColor: theme.line,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xs,
+    },
+    voiceShellText: { ...Type.caption, fontSize: 11, color: theme.textSecondary },
+    composerBar: {
+      minHeight: 64,
+      borderTopWidth: hairline,
+      borderTopColor: theme.line,
+      paddingHorizontal: Spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
+    recordButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.surfaceStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    recordIcon: { color: theme.text, fontSize: 16 },
+    chatInput: {
+      flex: 1,
+      minHeight: 48,
+      borderWidth: hairline,
+      borderColor: theme.lineStrong,
+      borderRadius: Radius.pill,
+      paddingHorizontal: Spacing.lg,
+      color: theme.text,
+      ...Type.body,
+    },
+    sendButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    sendGlyph: { color: theme.accentContrast, fontSize: 18 },
+
+    wakeConfirmTop: { alignItems: 'center', paddingTop: Spacing.xxl, paddingBottom: Spacing.xl },
+    alarmRing: {
+      width: 72,
+      height: 72,
+      borderWidth: 1.5,
+      borderColor: theme.accent,
+      borderRadius: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: Spacing.xl,
+    },
+    alarmIcon: { color: theme.accent, fontSize: 30 },
+    wakeConfirmTitle: { ...Type.title, color: theme.text, textAlign: 'center', marginTop: Spacing.sm },
+    wakeConfirmDetail: { ...Type.body, color: theme.textSecondary, textAlign: 'center', marginTop: Spacing.sm, maxWidth: 320 },
+    wakeConfirmNote: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xl, paddingHorizontal: Spacing.sm },
+
+    taskCard: { padding: Spacing.xl },
+    taskHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    taskDifficulty: { ...Type.label, color: theme.textSecondary },
+    taskPrompt: { ...Type.title, color: theme.text, marginTop: Spacing.xl, marginBottom: Spacing.lg },
+    taskChoice: {
+      minHeight: 56,
+      borderWidth: hairline,
+      borderColor: theme.lineStrong,
+      borderRadius: Radius.row,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: Spacing.md,
+      overflow: 'hidden',
+    },
+    taskChoiceText: { ...Type.heading, color: theme.text, fontVariant: ['tabular-nums'] },
+
+    successCard: { alignItems: 'center', padding: Spacing.xl, gap: Spacing.md },
+    successIcon: { color: theme.success, fontSize: 36 },
   });
 }

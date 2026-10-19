@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useZOZARStore, type CircleMember } from '@/components/zo-zar-store';
-import { BrandBar, Card, deterministicAvatar, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
+import { BrandBar, Card, deterministicAvatar, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme, Icons } from '@/components/zo-zar-ui';
 import { Fonts, type Theme } from '@/constants/theme';
 
 const MAX_CIRCLE = 3;
@@ -84,7 +84,7 @@ export default function PeopleRoute() {
       </View>
     </Card>
 
-    <View style={local.action}><PrimaryButton label={inviting ? 'Close invitation' : 'Invite someone'} icon={inviting ? '×' : '+'} disabled={!inviting && members.length >= MAX_CIRCLE} onPress={() => { setInviting((value) => !value); setError(null); }} /></View>
+    <View style={local.action}><PrimaryButton label={inviting ? 'Close invitation' : 'Invite someone'} icon={inviting ? Icons.close : Icons.userPlus} disabled={!inviting && members.length >= MAX_CIRCLE} onPress={() => { setInviting((value) => !value); setError(null); }} /></View>
     {inviting && <Card>
       <Text style={styles.sectionKicker}>Private invitation</Text>
       <Text style={styles.cardTitle}>Who would you trust on a difficult morning?</Text>
@@ -96,7 +96,7 @@ export default function PeopleRoute() {
     {error && <Card style={{ backgroundColor: theme.errorSurface, borderColor: theme.error }}><Text accessibilityRole="alert" style={[local.error, { color: theme.error }]}>{error}</Text></Card>}
 
     <View style={local.section}><SectionHeader kicker="Connected" title="People you trust" action={`${accepted.length}/${MAX_CIRCLE}`} /></View>
-    {accepted.length === 0 ? <EmptyState icon="◎" title="No one connected yet" detail="Once an invitation is accepted, chat and protected wake support appear here." /> : accepted.map((member) => <Card key={member.id} style={local.personCard}>
+    {accepted.length === 0 ? <EmptyState icon={Icons.users} title="No one connected yet" detail="Once an invitation is accepted, chat and protected wake support appear here." /> : accepted.map((member) => <Card key={member.id} style={local.personCard}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Open chat with ${member.name}`} onPress={() => router.push(`/chat/${member.id}` as never)} style={local.personRow}>
         <View style={[local.avatar, { backgroundColor: theme.warmSurface }]}><Text style={local.avatarCharacter}>{deterministicAvatar(member.id || member.name)}</Text></View>
         <View style={local.copy}><Text style={styles.cardTitle}>{member.name}</Text><Text style={styles.cardDetail}>{member.detail}</Text></View>

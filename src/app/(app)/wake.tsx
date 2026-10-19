@@ -19,6 +19,7 @@ import {
   Screen,
   SectionHeader,
   useZOZARTheme,
+  Icons,
 } from '@/components/zo-zar-ui';
 import { useZOZARStore, type WakePlan } from '@/components/zo-zar-store';
 import { getWakePermissionStatus } from '@/services/permission-onboarding';
@@ -157,13 +158,13 @@ export default function WakeRoute() {
     />
     <PrimaryButton
       label={wakePlans.length >= MAX_WAKE_PLANS ? 'Three alarms saved' : 'Create alarm'}
-      icon="+"
+      icon={Icons.plus}
       disabled={wakePlans.length >= MAX_WAKE_PLANS}
       onPress={() => openEditor(null)}
     />
 
     {wakePlans.length === 0 && <EmptyState
-      icon="◷"
+      icon={Icons.alarm}
       title="No alarms yet"
       detail="Create a one-time, daily, or weekday alarm. New alarms start paused so you can review them before they ring."
     />}

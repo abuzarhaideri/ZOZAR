@@ -1,5 +1,13 @@
-import { useEffect, useMemo, type PropsWithChildren } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, type PressableProps, type ViewStyle } from 'react-native';
+import { useEffect, type PropsWithChildren } from 'react';
+import {
+  AccessibilityInfo,
+  Platform,
+  Pressable,
+  StyleSheet,
+  type PressableProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -10,27 +18,23 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Motion } from '@/constants/theme';
+import { Motion, MinTarget } from '@/constants/theme';
 
 /**
  * ZO-ZAR's motion primitives.
  *
- * Three rules, taken from `motion.md › Best practices` and encoded here so screens get
- * them for free rather than re-deciding each time:
+ * Three rules, and the first is the one that gets broken most often:
  *
- * 1. Motion explains or confirms; it never decorates. Content arriving on screen moves a
- *    short distance in the direction it came from, and a press confirms itself. Nothing
- *    loops, pulses, or draws attention to itself.
- * 2. Motion is never the only signal. Every animated state change here is accompanied by
- *    a change in colour, text or layout, so a user with Reduce Motion enabled loses
- *    nothing but the movement.
- * 3. Motion is never blocking. `motion.md` asks that people be able to cancel it; these
- *    animations run on content that is already interactive, so a tap during an entrance
- *    is handled normally.
+ * 1. **One orchestrated moment per screen, not motion everywhere.** A fade-and-slide on
+ *    every section and a transition on every row is the generic default; it reads as
+ *    decoration and, on a screen opened at 06:00, as a delay. Each screen animates its
+ *    single most important element arriving, and nothing else moves unprompted.
+ * 2. **Motion answers an action, or it explains an arrival.** Never decorates.
+ * 3. **Motion is never the only signal.** Every animated change here is accompanied by a
+ *    change in colour, text or layout, so Reduce Motion costs nothing but movement.
  *
- * Reduce Motion is honoured throughout. Per `accessibility.md › Reduce motion`, the
- * response is to *reduce* animation, not remove feedback: transforms are dropped and a
- * cross-fade remains, so an element still reads as having arrived.
+ * Reduce Motion is honoured throughout, by *reducing* rather than removing: transforms
+ * drop and a cross-fade remains, so an element still reads as having arrived.
  *
  * Everything runs through Reanimated on the UI thread, so animation survives a busy JS
  * thread — which matters most on the Wake screen, where the app is doing real work at the
@@ -41,18 +45,23 @@ const standard = Easing.bezier(...Motion.easing.standard);
 const decelerate = Easing.bezier(...Motion.easing.decelerate);
 
 /**
- * Fades and lifts content into place.
+ * Fades and lifts one element into place.
  *
- * `delay` staggers a list. Callers should cap the stagger with `staggerDelay`, because a
- * long list animating item by item stops being an entrance and becomes a wait.
+ * Reserved for a screen's single orchestrated moment. If you are reaching for this on the
+ * fourth element of a screen, the screen does not need it.
  */
-export function FadeIn({
+export function Arrive({
   children,
   delay = 0,
   distance = Motion.enterOffset,
   duration = Motion.base,
   style,
-}: PropsWithChildren<{ delay?: number; distance?: number; duration?: number; style?: ViewStyle }>) {
+}: PropsWithChildren<{
+  delay?: number;
+  distance?: number;
+  duration?: number;
+  style?: StyleProp<ViewStyle>;
+}>) {
   const progress = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
@@ -62,68 +71,77 @@ export function FadeIn({
 
   const animated = useAnimatedStyle(() => ({
     opacity: progress.value,
-    // With Reduce Motion on, the fade stays and the movement goes.
     transform: reduceMotion ? [] : [{ translateY: (1 - progress.value) * distance }],
   }));
 
   return <Animated.View style={[style, animated]}>{children}</Animated.View>;
 }
 
-/** Caps the stagger so item 30 does not arrive a second and a half late. */
-export function staggerDelay(index: number): number {
-  return Math.min(index, Motion.maxStaggered) * Motion.stagger;
-}
-
 /**
- * A pressable that confirms the touch by scaling slightly.
+ * The project's touchable.
  *
- * This replaces the `opacity: 0.7` the app used before. Opacity dimming reads as
- * "disabled" as readily as "pressed"; a scale reads as physical. The change is small by
- * design — `motion.md` warns against adding motion to frequent interactions, and a button
- * press is the most frequent interaction there is.
+ * Feedback is Android's native ripple. AGENTS.md makes Android behaviour authoritative
+ * for touch interaction, and the platform's answer to "what happened when I pressed
+ * this" is a ripple from the point of contact — not the scale-down that iOS uses and
+ * that cross-platform code tends to import by reflex. The ripple also satisfies the
+ * stable-interaction rule: it changes colour in place rather than transforming bounds,
+ * so nothing around it jitters.
+ *
+ * On any platform without ripple support, a short opacity change stands in.
+ *
+ * `hitSlop` defaults to expanding a small control out to the 48dp Android minimum, so an
+ * icon drawn at 20px is still comfortably tappable without padding the layout.
  */
-export function PressableScale({
+export function Touchable({
   children,
   style,
-  scaleTo = Motion.pressScale,
+  rippleColor,
+  borderless = false,
+  expandHitSlop = 0,
   ...pressableProps
-}: PropsWithChildren<PressableProps & { style?: ViewStyle | ViewStyle[]; scaleTo?: number }>) {
-  const pressed = useSharedValue(0);
-  const reduceMotion = useReducedMotion();
-
-  const animated = useAnimatedStyle(() => ({
-    transform: reduceMotion ? [] : [{ scale: 1 - pressed.value * (1 - scaleTo) }],
-    // A small opacity shift remains under Reduce Motion so the press is still confirmed.
-    opacity: 1 - pressed.value * (reduceMotion ? 0.25 : 0.1),
-  }));
+}: PropsWithChildren<
+  PressableProps & {
+    style?: StyleProp<ViewStyle>;
+    rippleColor: string;
+    borderless?: boolean;
+    /** Pixels of invisible touch area to add on every side. */
+    expandHitSlop?: number;
+  }
+>) {
+  const slop = expandHitSlop || undefined;
 
   return (
-    <Animated.View style={animated}>
-      <Pressable
-        {...pressableProps}
-        onPressIn={(event) => {
-          pressed.value = withTiming(1, { duration: Motion.instant, easing: standard });
-          pressableProps.onPressIn?.(event);
-        }}
-        onPressOut={(event) => {
-          pressed.value = withTiming(0, { duration: Motion.fast, easing: standard });
-          pressableProps.onPressOut?.(event);
-        }}
-        style={style}
-      >
-        {children}
-      </Pressable>
-    </Animated.View>
+    <Pressable
+      {...pressableProps}
+      android_ripple={{ color: rippleColor, borderless }}
+      hitSlop={slop}
+      style={({ pressed }) => [
+        style,
+        // Android draws the ripple itself; elsewhere, dim briefly so the press is still
+        // confirmed.
+        Platform.OS !== 'android' && pressed ? { opacity: 0.72 } : null,
+      ]}
+    >
+      {children}
+    </Pressable>
   );
 }
 
+/** The minimum comfortable Android target, exported so controls can declare it rather
+ * than each re-deriving 48. */
+export const minTargetStyle: ViewStyle = { minHeight: MinTarget, minWidth: MinTarget };
+
 /**
- * Cross-fades when `value` changes, for a label whose text is replaced in place.
+ * Cross-fades when a displayed value changes in place.
  *
- * Used for things like a countdown or a status line, where a hard swap reads as a glitch.
- * The fade is short enough not to delay the new value being readable.
+ * For a countdown or a status line, where swapping the text outright reads as a glitch.
+ * Short enough not to delay the new value being readable.
  */
-export function CrossFade({ children, value, style }: PropsWithChildren<{ value: string | number; style?: ViewStyle }>) {
+export function CrossFade({
+  children,
+  value,
+  style,
+}: PropsWithChildren<{ value: string | number; style?: StyleProp<ViewStyle> }>) {
   const progress = useSharedValue(1);
   const reduceMotion = useReducedMotion();
 
@@ -133,18 +151,18 @@ export function CrossFade({ children, value, style }: PropsWithChildren<{ value:
     progress.value = withTiming(1, { duration: Motion.fast, easing: standard });
   }, [value, progress, reduceMotion]);
 
-  const animated = useAnimatedStyle(() => ({ opacity: 0.4 + progress.value * 0.6 }));
+  const animated = useAnimatedStyle(() => ({ opacity: 0.45 + progress.value * 0.55 }));
 
   return <Animated.View style={[style, animated]}>{children}</Animated.View>;
 }
 
 /**
- * A quiet activity indicator: a bar that fills and recedes.
+ * A quiet indeterminate bar, for short inline waits.
  *
- * Preferred over a spinner for inline, short waits. It is the one looping animation in the
- * system, so it stops entirely under Reduce Motion and shows a static filled bar, keeping
- * the "something is happening" signal without the repetition `accessibility.md` cautions
- * against.
+ * Preferred over a spinner because it does not imply a spinning-forever failure state.
+ * It is the only looping animation in the system, so under Reduce Motion it stops
+ * entirely and shows a static filled bar, keeping the "working" signal without the
+ * repetition that accessibility guidance warns about.
  */
 export function ProgressPulse({ color, height = 2 }: { color: string; height?: number }) {
   const progress = useSharedValue(0);
@@ -156,13 +174,8 @@ export function ProgressPulse({ color, height = 2 }: { color: string; height?: n
       return;
     }
     // withRepeat, not a self-calling completion callback: that callback is a worklet and
-    // cannot invoke an ordinary JS closure. `true` reverses each cycle, giving the
-    // fill-and-recede motion without any recursion.
-    progress.value = withRepeat(
-      withTiming(1, { duration: Motion.slow * 2, easing: standard }),
-      -1,
-      true,
-    );
+    // cannot invoke an ordinary JS closure. `true` reverses each cycle.
+    progress.value = withRepeat(withTiming(1, { duration: Motion.slow * 2, easing: standard }), -1, true);
   }, [progress, reduceMotion]);
 
   const animated = useAnimatedStyle(() => ({
@@ -170,20 +183,15 @@ export function ProgressPulse({ color, height = 2 }: { color: string; height?: n
     opacity: reduceMotion ? 0.5 : 0.35 + progress.value * 0.4,
   }));
 
-  const track = useMemo(
-    () => ({ height, borderRadius: height, backgroundColor: color, overflow: 'hidden' as const }),
-    [color, height],
-  );
-
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]} pointerEvents="none">
-      <Animated.View style={[track, animated]} />
+      <Animated.View style={[{ height, borderRadius: height, backgroundColor: color }, animated]} />
     </Animated.View>
   );
 }
 
-/** Imperatively announces a change for screen readers, where motion carried the meaning
- * for sighted users. Keeps rule 2 above honest. */
+/** Announces a change for screen readers where motion carried the meaning for sighted
+ * users. Keeps rule 3 above honest. */
 export function announce(message: string): void {
   AccessibilityInfo.announceForAccessibility(message);
 }

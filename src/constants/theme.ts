@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, type TextStyle } from 'react-native';
 
 /**
  * ZO-ZAR's semantic palette. Components consume roles, never raw mode colors.
@@ -144,12 +144,51 @@ export const Type = {
   heading: { fontFamily: Fonts.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   body: { fontFamily: Fonts.regular, fontSize: 16, lineHeight: 24 },
   callout: { fontFamily: Fonts.medium, fontSize: 15, lineHeight: 22 },
-  label: { fontFamily: Fonts.semibold, fontSize: 14, lineHeight: 20 },
+  /** Button and control text. */
+  action: { fontFamily: Fonts.semibold, fontSize: 15, lineHeight: 20 },
   caption: { fontFamily: Fonts.regular, fontSize: 13, lineHeight: 18 },
-  // Uppercase eyebrows: tracked out, because uppercase at small sizes needs the air.
-  eyebrow: { fontFamily: Fonts.semibold, fontSize: 11, lineHeight: 14, letterSpacing: 1.3 },
-  clock: { fontFamily: Fonts.bold, fontSize: 56, lineHeight: 62, letterSpacing: -2.5 },
-  clockSmall: { fontFamily: Fonts.semibold, fontSize: 32, lineHeight: 38, letterSpacing: -1 },
+  /**
+   * Section labels, in sentence case.
+   *
+   * These were tracked-out uppercase. A tracked ALL-CAPS label above every heading is one
+   * of the most reliable tells of generated design, and it costs legibility twice over:
+   * uppercase removes the word-shape that makes text scannable, and it is read here in
+   * the dark by someone barely awake. Sentence case at a quiet weight says the same thing
+   * without shouting.
+   */
+  label: { fontFamily: Fonts.medium, fontSize: 13, lineHeight: 18, letterSpacing: 0 },
+
+  /**
+   * The clock. This is where the design spends its boldness.
+   *
+   * A wake time is the one piece of information that matters on this screen, and it is
+   * read half asleep in a dark room. It is set enormous, tight, and tabular: without
+   * tabular figures the digits change width as the minutes tick and the whole number
+   * shifts, which reads as a glitch rather than a clock.
+   */
+  clock: {
+    fontFamily: Fonts.bold,
+    fontSize: 60,
+    lineHeight: 64,
+    letterSpacing: -3,
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
+  clockSmall: {
+    fontFamily: Fonts.semibold,
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -1,
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
+  /** Times inside list rows, where the row label carries the meaning and the time is the
+   * value being scanned down a column. */
+  clockRow: {
+    fontFamily: Fonts.medium,
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
 } as const;
 
 /** A 4pt grid. Named steps stop screens inventing 13px gaps. */
@@ -174,7 +213,37 @@ export const Spacing = {
   seven: 64,
 } as const;
 
-export const Radius = { small: 10, medium: 16, large: 22, xlarge: 28, pill: 999 } as const;
+/**
+ * Radii, assigned by what a container *is* rather than applied uniformly.
+ *
+ * A single radius on every surface is the SaaS-card look: it flattens the difference
+ * between a list row, an object you can act on, and a sheet that slid up from the bottom.
+ * Here the radius grows with how much the surface is meant to feel like a separate thing.
+ */
+export const Radius = {
+  /** Chips, small inline controls. */
+  tight: 8,
+  /** Rows and inputs: present, but barely. */
+  row: 12,
+  /** Cards: a discrete object with its own actions. */
+  card: 20,
+  /** Sheets and modals: something that arrived over the top of the screen. */
+  sheet: 28,
+  pill: 999,
+  // Retained so existing screens compile while they are migrated.
+  small: 12,
+  medium: 16,
+  large: 20,
+  xlarge: 28,
+} as const;
+
+/**
+ * Icon sizes as tokens, so the set stays rhythmic instead of drifting to 20/22/24/26 as
+ * screens are written. Lucide draws on a 24px grid at stroke-width 2, and that stroke is
+ * held constant across the whole interface.
+ */
+export const IconSize = { sm: 16, md: 20, lg: 24, xl: 32 } as const;
+export const IconStroke = 2;
 
 /**
  * Motion.

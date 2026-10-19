@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AlarmDatePicker, AlarmTimePicker, formatAlarmTime } from '@/components/alarm-time-picker';
 import { useZOZARStore, type Commitment } from '@/components/zo-zar-store';
-import { BrandBar, Card, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
+import { BrandBar, Card, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme, Icons } from '@/components/zo-zar-ui';
 import { Fonts, type Theme } from '@/constants/theme';
 
 function initialDate() {
@@ -86,13 +86,13 @@ export default function PlanRoute() {
   return <Screen>
     <BrandBar />
     <View style={styles.intro}><Text style={styles.eyebrow}>Plan · Your time</Text><Text style={styles.pageTitle}>Give the day shape.</Text><Text style={styles.lede}>A clear commitment, at the right moment, is enough to begin.</Text></View>
-    <View style={local.primaryAction}><PrimaryButton label="New commitment" icon="+" onPress={() => openEditor()} /></View>
+    <View style={local.primaryAction}><PrimaryButton label="New commitment" icon={Icons.plus} onPress={() => openEditor()} /></View>
 
     {hydrationError && <Card style={{ backgroundColor: theme.errorSurface, borderColor: theme.error }}><Text style={[styles.cardTitle, { color: theme.error }]}>Your plan could not be refreshed</Text><Text style={styles.cardDetail}>{hydrationError}</Text><PrimaryButton label="Try again" onPress={() => void retryHydration()} busy={isHydrating} /></Card>}
     {error && !editorOpen && <Text accessibilityRole="alert" style={[local.error, { color: theme.error }]}>{error}</Text>}
 
     <SectionHeader kicker="Agenda" title={`${commitments.length} commitment${commitments.length === 1 ? '' : 's'}`} />
-    {commitments.length === 0 ? <EmptyState icon="◇" title="Nothing planned yet" detail="Add a commitment and choose exactly when ZO-ZAR should remind you." action={<PrimaryButton label="Create a commitment" onPress={() => openEditor()} />} /> : Object.values(groups).map((items) => <View key={dateKey(items[0].startsAt)} style={local.group}>
+    {commitments.length === 0 ? <EmptyState icon={Icons.listChecks} title="Nothing planned yet" detail="Add a commitment and choose exactly when ZO-ZAR should remind you." action={<PrimaryButton label="Create a commitment" onPress={() => openEditor()} />} /> : Object.values(groups).map((items) => <View key={dateKey(items[0].startsAt)} style={local.group}>
       <Text style={[local.dayHeading, { color: theme.warm }]}>{dateHeading(items[0].startsAt)}</Text>
       <Card style={local.listCard}>{items.map((item, index) => <View key={item.id} style={[local.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.line }]}>
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: item.done }} accessibilityLabel={`${item.title}, ${item.done ? 'completed' : 'planned'}`} onPress={() => void toggleCommitment(item.id)} style={local.rowMain}>
