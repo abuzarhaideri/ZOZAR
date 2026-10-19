@@ -19,10 +19,12 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 ## ZO-ZAR visual direction
 
 - Use the semantic light and dark palettes in `src/constants/theme.ts`; do not add one-off screen colors.
-- The signature is a calm cobalt action color, slate matte surfaces, and a restrained warm horizon accent.
+- The palette is night-first: dark is the reference design and light is derived from it, because an alarm app is used in bed in the dark and a full-brightness white screen at 06:00 is the wrong default. Night-first describes which mode is designed first, not which mode is forced.
+- The signature is deep ink surfaces, a warm off-white text color, and a single warm amber action color that reads as sunrise rather than as an alert. Amber is the only accent; do not introduce a second competing accent hue.
 - Use bold, clean headings and tabular time typography. Do not reintroduce the old editorial-serif/photo composition.
 - Warm, contextual greetings should support the user’s next action without inventing product status.
-- Respect the device appearance by default and preserve the user’s System, Light, or Dark choice.
+- Respect the device appearance by default and preserve the user’s System, Light, or Dark choice. Light mode is a first-class variant and must meet the same contrast bar as dark; being night-first never means shipping a neglected light theme.
 - Use clear hierarchy, generous spacing, readable contrast, reduced-motion support, and touch targets of at least 48dp where practical.
 - Keep a fixed bottom navigation bar for Home, Wake, Plan, and People; editors and chats use conventional Back/Cancel navigation.
 - Avoid gradients, glass effects, decorative photography, and misleading protection or scheduling claims.
+- Motion is calm and purposeful: it should explain where something came from or confirm an action landed, never decorate. Use Reanimated on the UI thread, keep durations short, prefer opacity and transform over layout animation, and honor reduced-motion by reducing to a cross-fade rather than disabling feedback entirely.

@@ -17,6 +17,7 @@ Written 2026-10-19. Supersedes the Appwrite notes in `appwrite/README.md`.
 | Auth | Self-built: scrypt password hashing, JWT access tokens, rotating refresh tokens |
 | Push | FCM via `firebase-admin` in the worker Lambda |
 | IaC | AWS CDK (TypeScript) |
+| Region | `ap-south-1` (Mumbai) |
 | CI/CD | GitHub Actions: tests gate deploy |
 
 Firebase remains FCM-only. No Appwrite, no Supabase, no Firebase Auth/Firestore/Storage.
@@ -49,7 +50,10 @@ Consequences accepted:
   would require a NAT gateway at roughly $32/month, which would dwarf every other cost
   here. Security therefore rests on TLS plus credentials, not network isolation.
 - Aiven's free plan has no static IPs, so the database cannot be IP-allowlisted.
-- Aiven's free plan cannot pick a cloud region, so database latency is not tunable.
+- Aiven's free plan cannot pick a cloud region, so database latency is not tunable. AWS
+  runs in `ap-south-1` for proximity to users in India, but the hop to Aiven is whatever
+  region Aiven assigned. If that hop proves slow, the fix is Aiven's paid tier, which can
+  be pinned to a region, not an AWS change.
 - The upgrade path, if traffic ever justifies it, is Aiven's paid tier for PgBouncer.
 
 ## Cost
