@@ -68,7 +68,7 @@ export async function configureNotificationChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
   await Notifications.setNotificationChannelAsync(WAKE_CHANNEL_ID, {
-    name: 'ZO-ZAR wake alarms · ZO-ZAR sound',
+    name: 'Wake alarms (ZO-ZAR sound)',
     description: 'Time-critical alarms created by the user.',
     importance: Notifications.AndroidImportance.MAX,
     sound: WAKE_SOUND_FILE,
@@ -90,7 +90,7 @@ export async function configureNotificationChannels(): Promise<void> {
   });
 
   await Notifications.setNotificationChannelAsync(WAKE_DEFAULT_CHANNEL_ID, {
-    name: 'ZO-ZAR wake alarms · Android default',
+    name: 'Wake alarms (device sound)',
     description: 'Time-critical alarms created by the user.',
     importance: Notifications.AndroidImportance.MAX,
     sound: WAKE_DEFAULT_SOUND,

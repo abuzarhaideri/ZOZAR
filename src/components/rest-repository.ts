@@ -148,7 +148,7 @@ function mapCommitment(row: ServerCommitment): RepositoryCommitment {
   return {
     id: row.id,
     title: row.title,
-    detail: row.description ?? 'Personal · Commitment',
+    detail: row.description ?? '',
     dateLabel: new Date(row.startsAt).toLocaleDateString([], { weekday: 'long' }),
     time: displayTime(row.startsAt),
     startsAt: row.startsAt,

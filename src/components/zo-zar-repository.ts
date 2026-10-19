@@ -209,7 +209,7 @@ function nextOccurrenceForValues(
 function mapCommitment(row: Record<string, any>): RepositoryCommitment {
   const startsAt = row.startsAt ?? row.starts_at;
   const date = new Date(startsAt);
-  return { id: row.$id ?? row.id, title: row.title, detail: row.description ?? 'Personal · Commitment', dateLabel: date.toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: row.status === 'completed' };
+  return { id: row.$id ?? row.id, title: row.title, detail: row.description ?? '', dateLabel: date.toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: row.status === 'completed' };
 }
 
 function mapWakePlan(row: Record<string, any>, occurrence?: RepositoryWakeOccurrence): RepositoryWakePlan {
@@ -331,7 +331,7 @@ function localRepository(): ZOZARRepository {
     createCommitment: async (title, time) => {
       const startsAt = commitmentDate(time).toISOString();
       if (new Date(startsAt).getTime() <= Date.now()) throw new Error('Choose a future date and time for this commitment.');
-      const item = { id: `local-${Date.now()}`, title, detail: 'Personal · Commitment', dateLabel: new Date(startsAt).toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: false };
+      const item = { id: `local-${Date.now()}`, title, detail: '', dateLabel: new Date(startsAt).toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: false };
       commitments = [...commitments, item];
       return item;
     },

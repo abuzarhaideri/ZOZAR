@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { Card, Glyph, PrimaryButton, Screen, useZOZARTheme } from '@/components/zo-zar-ui';
+import { Card, Icon, Icons, PrimaryButton, Screen, useZOZARTheme } from '@/components/zo-zar-ui';
+import { Touchable } from '@/components/motion';
+import { IconSize, Spacing, Type, type Theme } from '@/constants/theme';
 import { useZOZARStore, type WakePlan } from '@/components/zo-zar-store';
 import type { RepositoryWakeOccurrence } from '@/components/zo-zar-repository';
 
@@ -24,6 +26,7 @@ function challengeFor(difficulty: WakePlan['difficulty'], seedValue: string) {
 
 export default function WakeConfirmationRoute() {
   const { styles, theme } = useZOZARTheme();
+  const wake = useMemo(() => makeWakeStyles(theme), [theme]);
   const { confirmWake, getWakeChallenge, userName } = useZOZARStore();
   const { id: rawId, practice: rawPractice, nativeCompleted: rawNativeCompleted } = useLocalSearchParams<{ id: string; practice?: string; nativeCompleted?: string }>();
   const occurrenceId = Array.isArray(rawId) ? rawId[0] : rawId;
@@ -96,13 +99,159 @@ export default function WakeConfirmationRoute() {
 
   const steps = challengeSteps.length;
 
-  return <Screen>
-    <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}><Glyph style={styles.backGlyph}>←</Glyph><Text style={styles.backText}>Exit wake</Text></Pressable>
-    {loading ? <Card><Text style={styles.cardTitle}>Loading your wake challenge…</Text></Card> : !challenge ? <Card><Text style={styles.cardTitle}>Wake challenge unavailable</Text><Text style={styles.cardDetail}>{error ?? 'Open Wake to choose an active occurrence.'}</Text><PrimaryButton label="Back to Wake" onPress={() => router.replace('/wake' as never)} /></Card> : <>
-      <View style={styles.wakeConfirmTop}><View style={styles.alarmRing}><Glyph style={styles.alarmIcon}>◷</Glyph></View><Text style={styles.sectionKicker}>{isPractice ? 'Challenge practice' : 'ZO-ZAR wake check'}</Text><Text style={styles.wakeConfirmTitle}>{complete ? (isPractice ? 'Practice complete.' : 'You’re ready for the day.') : `Good morning, ${userName}.`}</Text><Text style={styles.wakeConfirmDetail}>{complete ? (isPractice ? 'Your real wake occurrence was not changed.' : 'Your wake is confirmed and the alarm is stopped.') : `Complete the ${difficulty.toLowerCase()} check${isPractice ? ' without changing your live alarm' : ' to confirm you are awake'}.`}</Text></View>
-      {!complete ? <Card style={styles.taskCard}><View style={styles.taskHeader}><Text style={styles.sectionKicker}>Step {step + 1} of {steps}</Text><Text style={styles.taskDifficulty}>{difficulty}</Text></View><Text style={styles.taskPrompt}>{challengeSteps[step]?.prompt}</Text><TextInput accessibilityLabel="Wake challenge answer" autoFocus value={answer} onChangeText={setAnswer} onSubmitEditing={() => void finish()} keyboardType={difficulty === 'Hard' ? 'default' : 'numeric'} multiline={difficulty === 'Hard'} placeholder={difficulty === 'Hard' ? 'Type the passage exactly' : 'Type the answer'} placeholderTextColor={theme.subtle} style={[styles.input, difficulty === 'Hard' && { minHeight: 130, textAlignVertical: 'top' }]} /><PrimaryButton label={step === steps - 1 ? (isPractice ? 'Finish practice' : 'Confirm I’m awake') : 'Continue'} onPress={() => void finish()} disabled={!answer.trim()} busy={confirming} /></Card> : <Card style={styles.successCard}><Text style={styles.successIcon}>✓</Text><Text style={styles.cardTitle}>{isPractice ? 'Challenge completed safely' : confirmedAt ? `Wake confirmed at ${confirmedAt}` : 'Wake confirmed'}</Text><Text style={styles.cardDetail}>{isPractice ? 'Practice never confirms or changes a real wake occurrence.' : 'Your commitment is still ahead. Go gently.'}</Text><PrimaryButton label={isPractice ? 'Back to Wake' : 'Back to home'} onPress={() => router.replace((isPractice ? '/wake' : '/home') as never)} /></Card>}
-    </>}
-    {error && challenge && !complete && <Card><Text style={styles.cardDetail}>{error}</Text></Card>}
-    {!complete && challenge && <View style={styles.wakeConfirmNote}><Glyph style={styles.helperGlyph}>⌁</Glyph><Text style={styles.helperText}>{isPractice ? 'Practice mode does not stop alarms, confirm occurrences, or contact anyone.' : challenge.plan.protectedBy === 'No trusted person yet' ? `You have ${challenge.plan.graceMinutes} minutes to complete this check. No trusted person is linked.` : `If you do not complete this check in ${challenge.plan.graceMinutes} minutes, ${challenge.plan.protectedBy} can receive a wake-support notification.`}</Text></View>}
-  </Screen>;
+  return (
+    <Screen>
+      {/*
+        Chrome is kept to a single exit. This screen is read in the dark by someone who
+        has just been woken, so everything that is not the question, the answer field, or
+        the button is a distraction with a real cost.
+      */}
+      <Touchable
+        accessibilityRole="button"
+        accessibilityLabel="Leave without confirming"
+        onPress={() => router.back()}
+        rippleColor={theme.surfaceStrong}
+        borderless
+        style={styles.backButton}
+      >
+        <Icon as={Icons.back} size={IconSize.lg} color={theme.subtle} />
+        <Text style={wake.exitLabel}>Leave</Text>
+      </Touchable>
+
+      {loading ? (
+        <Card>
+          <Text style={styles.cardTitle}>Loading your challenge</Text>
+        </Card>
+      ) : !challenge ? (
+        <Card>
+          <Text style={styles.cardTitle}>This alarm is not available</Text>
+          <Text style={styles.cardDetail}>{error ?? 'Open Wake and turn on an alarm first.'}</Text>
+          <PrimaryButton label="Back to alarms" onPress={() => router.replace('/wake' as never)} />
+        </Card>
+      ) : complete ? (
+        <View style={wake.done}>
+          <View style={wake.doneMark}>
+            <Icon as={Icons.check} size={IconSize.xl} color={theme.success} label="Confirmed" />
+          </View>
+          <Text style={wake.doneTitle}>
+            {isPractice ? 'That was practice' : confirmedAt ? `Awake at ${confirmedAt}` : 'Awake'}
+          </Text>
+          <Text style={wake.doneDetail}>
+            {isPractice
+              ? 'Nothing changed. Your real alarm is still set.'
+              : 'Your alarm has stopped and nobody needs to check on you.'}
+          </Text>
+          <PrimaryButton
+            label={isPractice ? 'Back to alarms' : 'Start the day'}
+            onPress={() => router.replace((isPractice ? '/wake' : '/home') as never)}
+          />
+        </View>
+      ) : (
+        <View style={wake.task}>
+          <Text style={wake.greeting}>
+            {isPractice ? 'Practice' : `Good morning, ${userName}`}
+          </Text>
+
+          {/* The question is the hero. Everything else on screen is smaller than it. */}
+          <Text
+            accessibilityRole="header"
+            style={[wake.prompt, difficulty === 'Hard' && wake.promptLong]}
+          >
+            {challengeSteps[step]?.prompt}
+          </Text>
+
+          <TextInput
+            accessibilityLabel="Your answer"
+            autoFocus
+            value={answer}
+            onChangeText={setAnswer}
+            onSubmitEditing={() => void finish()}
+            keyboardType={difficulty === 'Hard' ? 'default' : 'numeric'}
+            multiline={difficulty === 'Hard'}
+            placeholder={difficulty === 'Hard' ? 'Type it exactly' : 'Answer'}
+            placeholderTextColor={theme.subtle}
+            style={[wake.answer, difficulty === 'Hard' && wake.answerLong]}
+          />
+
+          <PrimaryButton
+            label={step === steps - 1 ? (isPractice ? 'Finish' : 'I am awake') : 'Next'}
+            onPress={() => void finish()}
+            disabled={!answer.trim()}
+            busy={confirming}
+          />
+
+          {steps > 1 ? (
+            <Text style={wake.step}>
+              {step + 1} of {steps}
+            </Text>
+          ) : null}
+
+          {error ? (
+            <Text accessibilityRole="alert" style={wake.error}>
+              {error}
+            </Text>
+          ) : null}
+
+          {/*
+            The consequence, stated plainly and placed with the action rather than at the
+            foot of the screen. Someone deciding whether to put the phone down needs to
+            know who is about to be woken on their behalf.
+          */}
+          <View style={wake.stakes}>
+            <Icon as={Icons.shield} size={IconSize.sm} color={theme.textSecondary} />
+            <Text style={wake.stakesText}>
+              {isPractice
+                ? 'Practice does not stop a real alarm or message anyone.'
+                : challenge.plan.protectedBy === 'No trusted person yet'
+                  ? `${challenge.plan.graceMinutes} minutes to answer. Nobody else will be told.`
+                  : `${challenge.plan.graceMinutes} minutes to answer, or ${challenge.plan.protectedBy} hears about it.`}
+            </Text>
+          </View>
+        </View>
+      )}
+    </Screen>
+  );
 }
+
+const makeWakeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    exitLabel: { ...Type.callout, color: theme.subtle },
+
+    task: { paddingTop: Spacing.xl, gap: Spacing.lg },
+    greeting: { ...Type.body, color: theme.textSecondary },
+    // Large, because it is being read by someone who cannot yet focus properly.
+    prompt: { ...Type.display, color: theme.text },
+    promptLong: { ...Type.heading, color: theme.text, lineHeight: 30 },
+
+    answer: {
+      minHeight: 64,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.lineStrong,
+      borderRadius: 16,
+      paddingHorizontal: Spacing.lg,
+      color: theme.text,
+      backgroundColor: theme.surface,
+      ...Type.title,
+      fontVariant: ['tabular-nums'],
+    },
+    answerLong: { minHeight: 140, textAlignVertical: 'top', paddingTop: Spacing.lg, ...Type.body, color: theme.text },
+
+    step: { ...Type.caption, color: theme.subtle, textAlign: 'center' },
+    error: { ...Type.body, color: theme.error },
+
+    stakes: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginTop: Spacing.lg },
+    stakesText: { ...Type.caption, color: theme.textSecondary, flex: 1 },
+
+    done: { paddingTop: Spacing.huge, alignItems: 'center', gap: Spacing.lg },
+    doneMark: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      borderWidth: 1.5,
+      borderColor: theme.success,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    doneTitle: { ...Type.title, color: theme.text, textAlign: 'center' },
+    doneDetail: { ...Type.body, color: theme.textSecondary, textAlign: 'center', maxWidth: 320, marginBottom: Spacing.md },
+  });

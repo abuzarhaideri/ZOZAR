@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
-import { PrimaryButton, Screen, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
+import { Icon, Icons, PrimaryButton, Screen, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
 import { useZOZARStore } from '@/components/zo-zar-store';
 
 export default function SignUpScreen() {
@@ -37,7 +37,7 @@ export default function SignUpScreen() {
   </Screen>;
 
   return <Screen>
-    <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}><Text style={styles.backGlyph}>←</Text><Text style={styles.backText}>Sign in</Text></Pressable>
+    <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}><Icon as={Icons.back} size={20} color={theme.text} /><Text style={styles.backText}>Sign in</Text></Pressable>
     <View style={styles.authIntro}><Text style={styles.sectionKicker}>Start simply</Text><Text style={styles.authTitle}>Build a day you can trust.</Text><Text style={styles.authDetail}>Create your account, then we’ll set up the wake permissions together.</Text></View>
     <TextField label="Your name" value={name} onChangeText={setName} placeholder="Abuzar" autoCapitalize="words" autoComplete="name" textContentType="name" />
     <TextField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" textContentType="emailAddress" />

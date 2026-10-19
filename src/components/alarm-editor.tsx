@@ -81,7 +81,7 @@ export function alarmRepeatLabel(value: AlarmEditorValue) {
   if (value.scheduleType === 'daily') return 'Every day';
   if (value.weekdays.length === 7) return 'Every day';
   if (value.weekdays.join(',') === '1,2,3,4,5') return 'Every weekday';
-  return value.weekdays.map((day) => weekdayOptions.find((item) => item.value === day)?.label).filter(Boolean).join(' · ') || 'Choose days';
+  return value.weekdays.map((day) => weekdayOptions.find((item) => item.value === day)?.label).filter(Boolean).join(', ') || 'Choose days';
 }
 
 export function alarmScheduleDate(value: AlarmEditorValue) {
@@ -142,7 +142,7 @@ export function AlarmEditor({ initialValue, commitments, members, onSave, onPrev
       <OptionRow label="Summit Siren" detail="The strongest, very loud alarm." selected={value.soundKey === 'summit-siren'} onPress={() => set('soundKey', 'summit-siren')} />
       <OptionRow label="Android default" detail="Use the default alarm sound configured on this phone." selected={value.soundKey === 'default'} onPress={() => set('soundKey', 'default')} />
     </View>
-    {onPreviewSound && <Pressable accessibilityRole="button" accessibilityLabel={previewUnavailable ? 'Alarm sound preview is available in the Android build' : `Test ${wakeSoundLabel(value.soundKey)} sound`} accessibilityState={{ disabled: previewing || previewUnavailable }} disabled={previewing || previewUnavailable} onPress={() => void preview()} style={({ pressed }) => [{ minHeight: 50, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 22 }, pressed && styles.pressed, (previewing || previewUnavailable) && styles.disabled]}><Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{previewUnavailable ? 'Sound preview · Android build only' : previewing ? 'Scheduling sound test…' : `Test ${wakeSoundLabel(value.soundKey)} · rings in 10 seconds`}</Text></Pressable>}
+    {onPreviewSound && <Pressable accessibilityRole="button" accessibilityLabel={previewUnavailable ? 'Alarm sound preview is available in the Android build' : `Test ${wakeSoundLabel(value.soundKey)} sound`} accessibilityState={{ disabled: previewing || previewUnavailable }} disabled={previewing || previewUnavailable} onPress={() => void preview()} style={({ pressed }) => [{ minHeight: 50, borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 22 }, pressed && styles.pressed, (previewing || previewUnavailable) && styles.disabled]}><Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{previewUnavailable ? 'Sound preview needs the Android build' : previewing ? 'Scheduling sound test…' : `Hear ${wakeSoundLabel(value.soundKey)} in 10 seconds`}</Text></Pressable>}
 
     <Text style={styles.fieldLabel}>Repeat</Text>
     <View style={{ marginTop: 8 }}>
@@ -158,7 +158,7 @@ export function AlarmEditor({ initialValue, commitments, members, onSave, onPrev
     <Text style={styles.fieldLabel}>Link a commitment</Text>
     <View style={{ marginTop: 8 }}>
       <OptionRow label="No commitment" detail="Keep this wake independent." selected={value.commitmentId === null} onPress={() => set('commitmentId', null)} />
-      {commitments.map((item) => <OptionRow key={item.id} label={item.title} detail={`${item.time} · ${item.detail}`} selected={value.commitmentId === item.id} onPress={() => set('commitmentId', item.id)} />)}
+      {commitments.map((item) => <OptionRow key={item.id} label={item.title} detail={item.time} selected={value.commitmentId === item.id} onPress={() => set('commitmentId', item.id)} />)}
     </View>
     <Text style={styles.fieldLabel}>Trusted protection</Text>
     <View style={{ marginTop: 8 }}>
@@ -177,6 +177,6 @@ export function AlarmEditor({ initialValue, commitments, members, onSave, onPrev
     </View>
     {error && <Text accessibilityRole="alert" style={{ color: theme.error, fontSize: 13, lineHeight: 19, marginBottom: 12 }}>{error}</Text>}
     <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 18, marginBottom: 14 }}>This alarm uses the dedicated wake channel. Chat and trusted-person updates remain on non-bypassing channels.</Text>
-    <PrimaryButton label={`Save ${formatAlarmTime(value.time)} · ${alarmRepeatLabel(value)}`} onPress={() => void save()} busy={saving} />
+    <PrimaryButton label={`Save for ${formatAlarmTime(value.time)}`} onPress={() => void save()} busy={saving} />
   </View>;
 }

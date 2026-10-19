@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Glyph, useZOZARTheme } from '@/components/zo-zar-ui';
+import { Icon, Icons, useZOZARTheme } from '@/components/zo-zar-ui';
 import { useZOZARStore } from '@/components/zo-zar-store';
+import { Touchable } from '@/components/motion';
+import { IconSize, Spacing, Type, type Theme } from '@/constants/theme';
 import { createVoiceNotePlayer, VoiceNoteRecorder } from '@/services/voice-recorder-service';
 
 export default function ChatRoute() {
   const { styles, theme } = useZOZARTheme();
+  const chat = useMemo(() => makeChatStyles(theme), [theme]);
   const { messages, members, chatRetention, loadMessages, subscribeMessages, addMessage, addVoiceMessage, setChatRetention } = useZOZARStore();
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
@@ -61,13 +64,241 @@ export default function ChatRoute() {
     return () => clearInterval(timer);
   }, [recording]);
   useEffect(() => () => { void recorder.cancel(); players.forEach((player) => player.release()); players.clear(); }, [players, recorder]);
-  return <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'bottom']}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <View style={styles.chatHeader}><Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}><Glyph style={styles.backGlyph}>←</Glyph></Pressable><View style={styles.personAvatar}><Text style={styles.personAvatarText}>{member?.initials ?? '?'}</Text></View><View style={styles.listCopy}><Text style={styles.chatName}>{member?.name ?? 'Trusted person'}</Text><Text style={styles.chatStatus}>{member?.detail ?? 'Wake support'}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Chat settings" onPress={() => setSettingsOpen(true)} style={styles.backButton}><Glyph style={styles.chatHeaderIcon}>⋯</Glyph></Pressable></View>
-    <View style={styles.chatPrivacy}><Glyph style={styles.helperGlyph}>⌁</Glyph><Text style={styles.chatPrivacyText}>Private · messages disappear after {chatRetention === '7d' ? '1 week' : '1 month'}</Text></View>
-    <ScrollView contentContainerStyle={styles.chatMessages} keyboardShouldPersistTaps="handled">{messages.length === 0 && <View style={{ alignItems: 'center', paddingVertical: 28 }}><Text style={styles.cardTitle}>Start with something simple.</Text><Text style={[styles.cardDetail, { textAlign: 'center' }]}>A message or short voice note keeps wake support human.</Text></View>}{messages.map((message) => message.kind === 'system' ? <View key={message.id} style={{ alignItems: 'center', marginVertical: 10, paddingHorizontal: 28 }}><Text style={{ color: theme.muted, fontSize: 11, textAlign: 'center' }}>{message.body}</Text></View> : <View key={message.id} style={[styles.messageRow, message.author === 'me' && styles.messageRowMe]}><View style={[styles.messageBubble, message.author === 'me' ? { backgroundColor: theme.accent } : { backgroundColor: theme.surfaceStrong }]}>{message.kind === 'voice' ? <Pressable accessibilityRole="button" accessibilityLabel="Play voice note" onPress={() => playVoice(message.id, message.voiceUri)} style={styles.voiceBubble}><Glyph style={[styles.voiceIcon, { color: message.author === 'me' ? theme.accentContrast : theme.text }]}>▶</Glyph><Text style={[styles.voiceText, { color: message.author === 'me' ? theme.accentContrast : theme.text }]}>{message.body || 'Voice note'}</Text></Pressable> : <Text style={[styles.messageText, { color: message.author === 'me' ? theme.accentContrast : theme.text }]}>{message.body}</Text>}<Text style={[styles.messageTime, { color: message.author === 'me' ? theme.accentContrast : theme.muted }]}>{message.timestamp}</Text></View></View>)}</ScrollView>
-    {error && <View style={[styles.voiceShell, { backgroundColor: theme.errorSurface }]}><Text accessibilityRole="alert" style={[styles.voiceShellText, { color: theme.error }]}>{error}</Text></View>}
-    {recording && <View style={styles.voiceShell}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Text style={[styles.voiceShellText, { color: theme.error }]}>Recording · 0:{String(recordingSeconds).padStart(2, '0')}</Text><Pressable accessibilityRole="button" onPress={() => void cancelVoice()} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: theme.muted, fontWeight: '700' }}>Cancel</Text></Pressable></View></View>}
-    <View style={styles.composerBar}><Pressable accessibilityRole="button" accessibilityLabel={recording ? 'Stop and send voice note' : 'Record voice note'} onPress={() => void recordVoice()} style={[styles.recordButton, recording && { backgroundColor: theme.error }]}><Glyph style={[styles.recordIcon, recording && { color: theme.inverseText }]}>{recording ? '■' : '●'}</Glyph></Pressable><TextInput accessibilityLabel="Message" value={draft} onChangeText={setDraft} onSubmitEditing={() => void send()} placeholder={recording ? 'Finish recording to send' : 'Write a message'} placeholderTextColor={theme.subtle} style={styles.chatInput} returnKeyType="send" editable={!recording && !sending} /><Pressable accessibilityRole="button" accessibilityLabel="Send message" accessibilityState={{ disabled: !draft.trim() || sending }} disabled={!draft.trim() || sending} onPress={() => void send()} style={[styles.sendButton, (!draft.trim() || sending) && styles.disabled]}><Glyph style={styles.sendGlyph}>↑</Glyph></Pressable></View>
-    <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}><Pressable style={[styles.accountOverlay, { backgroundColor: 'rgba(0,0,0,0.56)' }]} onPress={() => setSettingsOpen(false)}><Pressable style={styles.accountSheet} onPress={(event) => event.stopPropagation()}><View style={styles.sheetHandle} /><Text style={styles.accountTitle}>Chat privacy</Text><Text style={[styles.cardDetail, { marginTop: 6 }]}>Messages disappear after</Text><View style={styles.appearanceGroup}>{(['7d', '30d'] as const).map((retention) => <Pressable key={retention} accessibilityRole="radio" accessibilityState={{ checked: chatRetention === retention }} onPress={() => { if (id) void setChatRetention(id, retention).then(() => setSettingsOpen(false)).catch((caught) => setError(caught instanceof Error ? caught.message : 'Chat settings could not be changed.')); }} style={styles.appearanceOption}><Text style={{ color: theme.text, fontWeight: '700' }}>{retention === '7d' ? '1 week' : '1 month'}</Text><Text style={{ color: chatRetention === retention ? theme.accent : theme.muted, fontSize: 22 }}>{chatRetention === retention ? '●' : '○'}</Text></Pressable>)}</View><Text style={[styles.cardDetail, { fontSize: 12 }]}>This setting is shared. Your trusted person will see a system message when it changes. Existing messages keep their original expiry.</Text></Pressable></Pressable></Modal>
-  </KeyboardAvoidingView></SafeAreaView>;
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.chatHeader}>
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+            rippleColor={theme.surfaceStrong}
+            borderless
+            expandHitSlop={8}
+            style={chat.headerButton}
+          >
+            <Icon as={Icons.back} size={IconSize.lg} color={theme.text} />
+          </Touchable>
+          <View style={styles.personAvatar}>
+            <Text style={styles.personAvatarText}>{member?.initials ?? '?'}</Text>
+          </View>
+          <View style={styles.listCopy}>
+            <Text style={styles.chatName}>{member?.name ?? 'Trusted person'}</Text>
+            <Text style={styles.chatStatus}>{member?.detail ?? 'Watches out for you'}</Text>
+          </View>
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel="Conversation settings"
+            onPress={() => setSettingsOpen(true)}
+            rippleColor={theme.surfaceStrong}
+            borderless
+            expandHitSlop={8}
+            style={chat.headerButton}
+          >
+            <Icon as={Icons.more} size={IconSize.lg} color={theme.subtle} />
+          </Touchable>
+        </View>
+
+        <View style={styles.chatPrivacy}>
+          <Icon as={Icons.lock} size={IconSize.sm} color={theme.subtle} />
+          <Text style={styles.chatPrivacyText}>
+            Messages here disappear after {chatRetention === '7d' ? 'a week' : 'a month'}
+          </Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.chatMessages} keyboardShouldPersistTaps="handled">
+          {messages.length === 0 ? (
+            <View style={chat.empty}>
+              <Text style={styles.cardTitle}>No messages yet</Text>
+              <Text style={chat.emptyDetail}>
+                A short note now is easier than explaining yourself at 6am.
+              </Text>
+            </View>
+          ) : null}
+
+          {messages.map((message) =>
+            message.kind === 'system' ? (
+              <View key={message.id} style={chat.systemRow}>
+                <Text style={chat.systemText}>{message.body}</Text>
+              </View>
+            ) : (
+              <View key={message.id} style={[styles.messageRow, message.author === 'me' && styles.messageRowMe]}>
+                <View
+                  style={[
+                    styles.messageBubble,
+                    { backgroundColor: message.author === 'me' ? theme.accent : theme.surfaceStrong },
+                  ]}
+                >
+                  {message.kind === 'voice' ? (
+                    <Touchable
+                      accessibilityRole="button"
+                      accessibilityLabel="Play this voice note"
+                      onPress={() => playVoice(message.id, message.voiceUri)}
+                      rippleColor={theme.background}
+                      style={styles.voiceBubble}
+                    >
+                      <Icon
+                        as={Icons.play}
+                        size={IconSize.sm}
+                        color={message.author === 'me' ? theme.accentContrast : theme.text}
+                      />
+                      <Text
+                        style={[
+                          styles.voiceText,
+                          { color: message.author === 'me' ? theme.accentContrast : theme.text },
+                        ]}
+                      >
+                        {message.body || 'Voice note'}
+                      </Text>
+                    </Touchable>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.messageText,
+                        { color: message.author === 'me' ? theme.accentContrast : theme.text },
+                      ]}
+                    >
+                      {message.body}
+                    </Text>
+                  )}
+                  <Text
+                    style={[
+                      styles.messageTime,
+                      { color: message.author === 'me' ? theme.accentContrast : theme.subtle },
+                    ]}
+                  >
+                    {message.timestamp}
+                  </Text>
+                </View>
+              </View>
+            ),
+          )}
+        </ScrollView>
+
+        {error ? (
+          <View style={[styles.voiceShell, { backgroundColor: theme.errorSurface }]}>
+            <Text accessibilityRole="alert" style={[styles.voiceShellText, { color: theme.error }]}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+
+        {recording ? (
+          <View style={styles.voiceShell}>
+            <View style={chat.recordingRow}>
+              <Text style={chat.recordingText}>
+                Recording, 0:{String(recordingSeconds).padStart(2, '0')}
+              </Text>
+              <Touchable
+                accessibilityRole="button"
+                accessibilityLabel="Discard this recording"
+                onPress={() => void cancelVoice()}
+                rippleColor={theme.surfaceStrong}
+                style={chat.cancelRecording}
+              >
+                <Text style={chat.cancelRecordingText}>Discard</Text>
+              </Touchable>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.composerBar}>
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel={recording ? 'Stop recording and send' : 'Record a voice note'}
+            onPress={() => void recordVoice()}
+            rippleColor={theme.background}
+            style={[styles.recordButton, recording && { backgroundColor: theme.error }]}
+          >
+            <Icon
+              as={recording ? Icons.stop : Icons.mic}
+              size={IconSize.md}
+              color={recording ? theme.accentContrast : theme.text}
+            />
+          </Touchable>
+
+          <TextInput
+            accessibilityLabel="Message"
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={() => void send()}
+            placeholder={recording ? 'Finish recording first' : 'Write a message'}
+            placeholderTextColor={theme.subtle}
+            style={styles.chatInput}
+            returnKeyType="send"
+            editable={!recording && !sending}
+          />
+
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !draft.trim() || sending }}
+            disabled={!draft.trim() || sending}
+            onPress={() => void send()}
+            rippleColor={theme.accentContrast}
+            style={[styles.sendButton, (!draft.trim() || sending) && styles.disabled]}
+          >
+            <Icon as={Icons.send} size={IconSize.md} color={theme.accentContrast} />
+          </Touchable>
+        </View>
+
+        <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close settings"
+            style={[styles.accountOverlay, { backgroundColor: theme.scrim }]}
+            onPress={() => setSettingsOpen(false)}
+          >
+            <Pressable style={styles.accountSheet} onPress={(event) => event.stopPropagation()}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.accountTitle}>How long messages last</Text>
+              <Text style={styles.cardDetail}>
+                This applies to both of you, and your trusted person is told when it changes. Messages already sent
+                keep the expiry they were sent with.
+              </Text>
+              <View style={styles.appearanceGroup}>
+                {(['7d', '30d'] as const).map((retention) => (
+                  <Touchable
+                    key={retention}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: chatRetention === retention }}
+                    accessibilityLabel={retention === '7d' ? 'A week' : 'A month'}
+                    onPress={() => {
+                      if (id)
+                        void setChatRetention(id, retention)
+                          .then(() => setSettingsOpen(false))
+                          .catch((caught) =>
+                            setError(caught instanceof Error ? caught.message : 'That could not be changed.'),
+                          );
+                    }}
+                    rippleColor={theme.surfaceStrong}
+                    style={[
+                      styles.appearanceOption,
+                      chatRetention === retention && { borderColor: theme.accent, backgroundColor: theme.backgroundSelected },
+                    ]}
+                  >
+                    <Text style={styles.optionLabel}>{retention === '7d' ? 'A week' : 'A month'}</Text>
+                    {chatRetention === retention ? <Icon as={Icons.check} size={IconSize.md} color={theme.accent} /> : null}
+                  </Touchable>
+                ))}
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
+
+const makeChatStyles = (theme: Theme) =>
+  StyleSheet.create({
+    headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    empty: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
+    emptyDetail: { ...Type.body, color: theme.textSecondary, textAlign: 'center', maxWidth: 280 },
+    systemRow: { alignItems: 'center', marginVertical: Spacing.sm, paddingHorizontal: Spacing.xxl },
+    systemText: { ...Type.caption, color: theme.subtle, textAlign: 'center' },
+    recordingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    recordingText: { ...Type.caption, color: theme.error },
+    cancelRecording: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.sm },
+    cancelRecordingText: { ...Type.action, color: theme.textSecondary },
+  });

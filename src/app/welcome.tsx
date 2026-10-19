@@ -78,7 +78,7 @@ export default function WelcomeRoute() {
         <Pressable accessibilityRole="button" accessibilityLabel={`${words.action}. Open Home.`} onPress={() => router.replace('/home' as never)} style={({ pressed }) => [local.continueButton, { backgroundColor: theme.accent }, pressed && { opacity: 0.78 }]}>
           <Text style={local.continueText}>{words.action}</Text><Text style={local.arrow}>→</Text>
         </Pressable>
-        <Text style={[local.caption, { color: theme.subtle }]}>{reducedMotion ? 'Motion reduced to match your device setting.' : 'Wake · Plan · People'}</Text>
+        <Text style={[local.caption, { color: theme.subtle }]}>{reducedMotion ? 'Motion reduced to match your device setting.' : 'Wake, plan, and someone who checks'}</Text>
       </Animated.View>
     </ScrollView>
   </SafeAreaView>;

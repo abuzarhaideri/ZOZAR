@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 
-import { Card, Glyph, PrimaryButton, Screen, useZOZARTheme } from '@/components/zo-zar-ui';
+import { Card, Icon, Icons, PrimaryButton, Screen, useZOZARTheme } from '@/components/zo-zar-ui';
 import { useZOZARStore } from '@/components/zo-zar-store';
 import { getWakePermissionStatus, requestWakePermissionStep, type WakePermissionStatus, type WakePermissionStep } from '@/services/permission-onboarding';
 
@@ -66,7 +66,7 @@ export default function PermissionsScreen() {
 
   return <Screen>
     <View style={styles.onboardingHeader}><Text style={styles.sectionKicker}>Wake setup</Text><Text style={styles.authTitle}>Let alarms keep their promise.</Text><Text style={styles.authDetail}>Android asks you to approve each setting. ZO-ZAR checks the real device status every time you return.</Text></View>
-    <Card style={styles.permissionNotice}><Glyph style={styles.permissionNoticeIcon}>⌁</Glyph><View style={styles.permissionNoticeCopy}><Text style={styles.cardTitle}>Only the wake alarm is urgent</Text><Text style={styles.cardDetail}>Chat, voice notes, and normal reminders stay quiet and never bypass Do Not Disturb.</Text></View></Card>
+    <Card style={styles.permissionNotice}><Icon as={Icons.shield} size={20} color={theme.success} /><View style={styles.permissionNoticeCopy}><Text style={styles.cardTitle}>Only the wake alarm is urgent</Text><Text style={styles.cardDetail}>Chat, voice notes, and normal reminders stay quiet and never bypass Do Not Disturb.</Text></View></Card>
     <View style={styles.permissionList}>{permissionSteps.map((step, index) => { const complete = isComplete(step.id); const unknown = step.id === 'exact-alarm' && status?.exactAlarm === 'unknown'; const detail = step.id === 'exact-alarm' ? exactAlarmDetail() : step.detail; return <Card key={step.id} style={styles.permissionCard}><View style={styles.permissionNumber}><Text style={styles.permissionNumberText}>{complete ? '✓' : index + 1}</Text></View><View style={styles.permissionCopy}><Text style={styles.cardTitle}>{step.title}</Text><Text style={styles.cardDetail}>{detail}</Text><Pressable accessibilityRole="button" onPress={() => grant(step.id)} style={styles.permissionAction}><Text style={styles.permissionActionText}>{complete ? 'Allowed' : 'Open Android settings'}</Text><Text style={styles.permissionArrow}>→</Text></Pressable>{unknown && <Pressable accessibilityRole="button" onPress={refresh} style={styles.permissionAction}><Text style={styles.permissionActionText}>Re-check exact-alarm status</Text><Text style={styles.permissionArrow}>↻</Text></Pressable>}</View></Card>; })}</View>
     {error && <Text accessibilityRole="alert" style={[styles.authNoteText, { color: theme.error, marginBottom: 12 }]}>{error}</Text>}
     <PrimaryButton label={checking ? 'Checking permissions…' : 'Continue to ZO-ZAR'} onPress={continueToApp} disabled={!ready} busy={checking} />
