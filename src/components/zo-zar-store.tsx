@@ -28,6 +28,7 @@ import {
   type RepositoryWakePlanInput,
   type UiDifficulty,
   type ZOZARRepository,
+  isServerBacked,
 } from './zo-zar-repository';
 
 export type Difficulty = UiDifficulty;
@@ -213,7 +214,8 @@ export function ZOZARStoreProvider({ children }: PropsWithChildren) {
   }
 
   function registerPushToken() {
-    if (repository.mode !== 'APPWRITE') return;
+    // Nothing to register against without a server.
+    if (!isServerBacked(repository.mode)) return;
     void registerForPushNotifications({ persist: (registration) => repository.upsertDeviceToken(registration) }).catch(() => undefined);
   }
 
@@ -331,7 +333,7 @@ export function ZOZARStoreProvider({ children }: PropsWithChildren) {
     subscribeMessages: (threadOrMemberId, onChange) => repository.subscribeMessages(threadOrMemberId, onChange),
     setChatRetention: async (threadOrMemberId, retention) => { await repository.setChatRetention(threadOrMemberId, retention); setChatRetentionState(retention); setMessages(await repository.listMessages(threadOrMemberId)); },
     addMessage: async (threadOrMemberId, body) => { const message = await repository.sendMessage(threadOrMemberId, body); if (message) setMessages((items) => [...items, message]); },
-    addVoiceMessage: async (threadOrMemberId, artifact) => { await repository.sendVoiceNote(threadOrMemberId, artifact); if (repository.mode === 'APPWRITE') setMessages(await repository.listMessages(threadOrMemberId)); else setMessages((items) => [...items, { id: `local-voice-${Date.now()}`, body: `Voice note · 0:${String(artifact.durationSeconds).padStart(2, '0')}`, timestamp: 'Now', author: 'me', kind: 'voice' }]); },
+    addVoiceMessage: async (threadOrMemberId, artifact) => { await repository.sendVoiceNote(threadOrMemberId, artifact); if (isServerBacked(repository.mode)) setMessages(await repository.listMessages(threadOrMemberId)); else setMessages((items) => [...items, { id: `local-voice-${Date.now()}`, body: `Voice note · 0:${String(artifact.durationSeconds).padStart(2, '0')}`, timestamp: 'Now', author: 'me', kind: 'voice' }]); },
     confirmWake: async (occurrenceId) => {
       const occurrence = wakeOccurrences.find((item) => item.id === occurrenceId) ?? await repository.getWakeOccurrence(occurrenceId);
       await repository.confirmWake(occurrenceId);
