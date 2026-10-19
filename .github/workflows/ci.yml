@@ -67,6 +67,39 @@ jobs:
         # after a partial deploy.
         run: npm run db:migrate
 
+  infra:
+    name: Infrastructure synth
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - run: npm ci
+
+      # The server deps are needed too: the stack bundles the handlers with esbuild, so a
+      # synth that cannot resolve them would pass here and fail at deploy.
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - run: npm run typecheck
+
+      - name: Synth
+        # No credentials: synth is offline, and a stack that only validates against a real
+        # account is a stack nobody can review in a pull request.
+        env:
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+          CDK_DEFAULT_REGION: ap-south-1
+        run: npx cdk synth --quiet
+
   app:
     name: App typecheck
     runs-on: ubuntu-latest

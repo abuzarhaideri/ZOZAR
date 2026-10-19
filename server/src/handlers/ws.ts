@@ -3,6 +3,7 @@ import type { APIGatewayProxyWebsocketEventV2, APIGatewayProxyResultV2 } from 'a
 
 import { verifyAccessToken } from '@/auth/tokens';
 import { getDatabase, schema } from '@/db/client';
+import { loadSecrets } from '@/lib/config';
 import { subscribeConnection } from '@/realtime/publish';
 
 /**
@@ -20,6 +21,7 @@ import { subscribeConnection } from '@/realtime/publish';
 export const handler = async (
   event: APIGatewayProxyWebsocketEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
+  await loadSecrets();
   const { routeKey, connectionId } = event.requestContext;
 
   switch (routeKey) {

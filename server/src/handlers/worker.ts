@@ -1,5 +1,6 @@
 import type { ScheduledHandler } from 'aws-lambda';
 
+import { loadSecrets } from '@/lib/config';
 import { runAllTasks } from '@/worker/tasks';
 
 /**
@@ -10,6 +11,7 @@ import { runAllTasks } from '@/worker/tasks';
  * The report is logged as one structured line for CloudWatch.
  */
 export const handler: ScheduledHandler = async () => {
+  await loadSecrets();
   const started = Date.now();
   const report = await runAllTasks();
   console.log('[worker] run complete', { durationMs: Date.now() - started, ...report });

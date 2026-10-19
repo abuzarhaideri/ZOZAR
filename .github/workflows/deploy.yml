@@ -1,0 +1,113 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Manual runs for a rollback or a re-deploy without a code change.
+  workflow_dispatch:
+
+# Never two deploys at once, and never cancel one midway: an interrupted
+# CloudFormation update leaves the stack in UPDATE_ROLLBACK_FAILED, which needs manual
+# recovery.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # Deploy is gated on the same checks CI runs, re-run here rather than trusted from the
+  # push event, so a green commit cannot be deployed on the strength of a stale run.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zozar
+          POSTGRES_PASSWORD: zozar
+          POSTGRES_DB: zozar_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U zozar"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgres://zozar:zozar@localhost:5432/zozar_test?sslmode=disable
+      JWT_SECRET: ci-only-secret-value-at-least-32-bytes-long
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run db:migrate
+
+  deploy:
+    name: Deploy to AWS
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      # Required for OIDC. The job exchanges this token for short-lived AWS credentials,
+      # so no long-lived access key is ever stored in GitHub.
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install infrastructure dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Assume deployment role
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+          role-session-name: zozar-deploy-${{ github.run_id }}
+
+      # Schema changes are applied before the code that depends on them, and the
+      # migrations are proven against a throwaway Postgres in `verify` above. Migrations
+      # must therefore be backward compatible: the previous Lambda version is still
+      # serving traffic while this runs.
+      - name: Apply database migrations
+        working-directory: server
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_CA_CERT: ${{ secrets.DATABASE_CA_CERT }}
+          NODE_ENV: production
+        run: npm run db:migrate
+
+      - name: Deploy stack
+        working-directory: infra
+        env:
+          CDK_DEFAULT_REGION: ap-south-1
+        run: npx cdk deploy --require-approval never --outputs-file cdk-outputs.json
+
+      - name: Report endpoints
+        working-directory: infra
+        run: |
+          echo '### Deployed' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat cdk-outputs.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
