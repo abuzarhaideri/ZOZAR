@@ -5,6 +5,10 @@ import { cors } from 'hono/cors';
 import { verifyAccessToken, bearerFromHeader } from '@/auth/tokens';
 import { authRoutes } from '@/routes/auth';
 import { commitmentRoutes } from '@/routes/commitments';
+import { chatRoutes } from '@/routes/chat';
+import { deviceRoutes } from '@/routes/devices';
+import { profileRoutes } from '@/routes/profile';
+import { connectionRoutes } from '@/routes/connections';
 import { wakeOccurrenceRoutes, wakePlanRoutes } from '@/routes/wake';
 import { unauthorized, type AppEnv } from '@/lib/http';
 
@@ -39,6 +43,10 @@ export function createApp() {
   app.route('/v1/commitments', commitmentRoutes);
   app.route('/v1/wake-plans', wakePlanRoutes);
   app.route('/v1/wake-occurrences', wakeOccurrenceRoutes);
+  app.route('/v1/connections', connectionRoutes);
+  app.route('/v1/chat', chatRoutes);
+  app.route('/v1/device-tokens', deviceRoutes);
+  app.route('/v1/profile', profileRoutes);
 
   app.notFound(() => Response.json({ error: { code: 'not_found', message: 'Not found.' } }, { status: 404 }));
 

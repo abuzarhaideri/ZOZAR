@@ -1,5 +1,7 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
+
+import { sha256Hex } from '@/lib/hash';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const REFRESH_TOKEN_TTL_DAYS = 60;
@@ -78,7 +80,7 @@ export function createRefreshToken(): { token: string; tokenHash: string } {
  * token expiry where latency is visible.
  */
 export function hashRefreshToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  return sha256Hex(token);
 }
 
 export function refreshTokenExpiry(now: Date = new Date()): Date {

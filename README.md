@@ -17,7 +17,8 @@ The backend is being migrated from Appwrite onto infrastructure this project own
 | Authorization rules | Done, tested |
 | Wake recurrence and escalation logic | Done, tested, daylight-saving aware |
 | CI | Done |
-| Remaining API routes | In progress |
+| API routes: commitments, wake, connections, chat, devices, profile | Done, tested |
+| S3 presigned uploads (voice notes, photos) | Not started |
 | WebSocket realtime, scheduled worker | Not started |
 | AWS CDK infrastructure | Not started |
 | Appwrite data migration | Not started |
