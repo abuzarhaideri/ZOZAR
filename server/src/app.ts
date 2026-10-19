@@ -8,6 +8,7 @@ import { commitmentRoutes } from '@/routes/commitments';
 import { chatRoutes } from '@/routes/chat';
 import { deviceRoutes } from '@/routes/devices';
 import { profileRoutes } from '@/routes/profile';
+import { uploadRoutes } from '@/routes/uploads';
 import { connectionRoutes } from '@/routes/connections';
 import { wakeOccurrenceRoutes, wakePlanRoutes } from '@/routes/wake';
 import { unauthorized, type AppEnv } from '@/lib/http';
@@ -47,6 +48,7 @@ export function createApp() {
   app.route('/v1/chat', chatRoutes);
   app.route('/v1/device-tokens', deviceRoutes);
   app.route('/v1/profile', profileRoutes);
+  app.route('/v1/uploads', uploadRoutes);
 
   app.notFound(() => Response.json({ error: { code: 'not_found', message: 'Not found.' } }, { status: 404 }));
 
