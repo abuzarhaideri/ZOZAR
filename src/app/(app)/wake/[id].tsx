@@ -143,7 +143,7 @@ export default function WakeConfirmationRoute() {
           </Text>
           <PrimaryButton
             label={isPractice ? 'Back to alarms' : 'Start the day'}
-            onPress={() => router.replace((isPractice ? '/wake' : '/home') as never)}
+            onPress={() => router.replace((isPractice ? '/wake' : '/tonight') as never)}
           />
         </View>
       ) : (

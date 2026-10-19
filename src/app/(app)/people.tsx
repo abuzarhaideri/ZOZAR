@@ -1,47 +1,68 @@
 import { router } from 'expo-router';
-import { useState, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { Touchable } from '@/components/motion';
 import { useZOZARStore, type CircleMember } from '@/components/zo-zar-store';
 import {
   BrandBar,
-  Card,
-  deterministicAvatar,
-  EmptyState,
   Icon,
   Icons,
-  PrimaryButton,
   Screen,
-  SectionLabel,
   TextField,
+  deterministicAvatar,
   useZOZARTheme,
 } from '@/components/zo-zar-ui';
-import { Touchable } from '@/components/motion';
 import { IconSize, Radius, Spacing, Type, type Theme } from '@/constants/theme';
+
+/**
+ * People.
+ *
+ * The old screen listed contacts and hung four buttons off each one: invite, accept,
+ * decline, remove. That is an address book, and an address book is the wrong object. The
+ * thing being modelled is that somebody has agreed to be woken up on your behalf — a
+ * real favour between two people, and the only reason this app is not just a clock.
+ *
+ * Slowly's idea is that a connection should carry weight and take time: letters that
+ * travel, stamps you keep. So:
+ *
+ * - An accepted person is a **standing mark**, not a row: their initial set large in
+ *   warm ink, with plain language about exactly what they receive. No buttons on it —
+ *   you touch the person to talk to them, and remove sits behind a long press because it
+ *   ends something.
+ * - An invitation you sent is **in transit**, and says so. It has left, it has not
+ *   arrived, and there is nothing to do but wait. More honest than a row with a greyed
+ *   out button.
+ * - An invitation you received is the one place two real choices exist, so it gets two
+ *   plain text actions rather than a filled button fighting a ghost button.
+ */
 
 const MAX_CIRCLE = 3;
 
 export default function PeopleRoute() {
-  const { styles, theme } = useZOZARTheme();
-  const local = useMemo(() => makeLocal(theme), [theme]);
+  const { theme } = useZOZARTheme();
+  const local = useMemo(() => makeStyles(theme), [theme]);
   const { members, addMember, respondToInvitation, removeMember } = useZOZARStore();
-  const [inviting, setInviting] = useState(false);
+
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [memberBusy, setMemberBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const accepted = members.filter((member) => member.status === 'Accepted');
-  const pending = members.filter((member) => member.status === 'Pending');
+  const incoming = members.filter((member) => member.status === 'Pending' && member.relationship === 'incoming');
+  const outgoing = members.filter((member) => member.status === 'Pending' && member.relationship === 'outgoing');
+  const full = accepted.length + outgoing.length >= MAX_CIRCLE;
 
   async function invite() {
-    if (!email.includes('@') || busy) return;
+    const value = email.trim();
+    if (!value.includes('@') || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await addMember(email.trim());
+      await addMember(value);
       setEmail('');
-      setInviting(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The invitation could not be sent.');
     } finally {
@@ -49,7 +70,7 @@ export default function PeopleRoute() {
     }
   }
 
-  async function runMemberAction(member: CircleMember, action: 'accept' | 'decline' | 'remove') {
+  async function act(member: CircleMember, action: 'accept' | 'decline' | 'remove') {
     if (memberBusy) return;
     setMemberBusy(member.id);
     setError(null);
@@ -59,311 +80,287 @@ export default function PeopleRoute() {
       else await removeMember(member.id);
       setConfirming(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The trusted-circle change could not be saved.');
+      setError(caught instanceof Error ? caught.message : 'That change could not be saved.');
     } finally {
       setMemberBusy(null);
     }
   }
 
-  /**
-   * The confirm step for a destructive change.
-   *
-   * It names what is about to happen in the question and repeats the verb on the button,
-   * so the person reading it in a hurry cannot mistake which control does what. "Keep" is
-   * the safe default and sits first.
-   */
-  function MemberConfirmation({ member, action }: { member: CircleMember; action: 'decline' | 'remove' }) {
-    if (confirming !== member.id) return null;
-    const question =
-      action === 'decline'
-        ? `Decline ${member.name}?`
-        : member.status === 'Pending'
-          ? `Cancel the invitation to ${member.name}?`
-          : `Remove ${member.name}? They stop hearing about your wakes.`;
-
-    return (
-      <View style={local.confirmPanel}>
-        <Text style={local.confirmText}>{question}</Text>
-        <View style={local.confirmActions}>
-          <Touchable
-            accessibilityRole="button"
-            accessibilityLabel="Keep things as they are"
-            onPress={() => setConfirming(null)}
-            rippleColor={theme.surfaceStrong}
-            style={local.declineButton}
-          >
-            <Text style={local.declineText}>Keep</Text>
-          </Touchable>
-          <Touchable
-            accessibilityRole="button"
-            accessibilityLabel={action === 'decline' ? `Decline ${member.name}` : `Remove ${member.name}`}
-            accessibilityState={{ busy: memberBusy === member.id }}
-            disabled={memberBusy === member.id}
-            onPress={() => void runMemberAction(member, action)}
-            rippleColor={theme.background}
-            style={local.destructiveButton}
-          >
-            <Text style={local.destructiveText}>
-              {memberBusy === member.id ? 'Saving' : action === 'decline' ? 'Decline' : 'Remove'}
-            </Text>
-          </Touchable>
-        </View>
-      </View>
-    );
-  }
+  const headline =
+    accepted.length === 0
+      ? 'Nobody has your back yet'
+      : accepted.length === 1
+        ? `${accepted[0].name.split(/\s+/)[0]} has your back`
+        : `${accepted.length} people have your back`;
 
   return (
     <Screen>
       <BrandBar />
 
-      <View style={styles.intro}>
-        <Text accessibilityRole="header" style={styles.pageTitle}>
-          Who has your back
+      <View style={local.intro}>
+        <Text accessibilityRole="header" style={local.title}>
+          {headline}
         </Text>
-        {/*
-          Slowly's lens: a connection is a relationship, not a contact entry. The copy
-          says what the other person actually experiences, because that is what makes
-          someone hesitate before inviting — and what makes the feature trustworthy.
-        */}
-        <Text style={styles.lede}>
+        <Text style={local.lede}>
           {accepted.length === 0
-            ? 'Pick someone who would actually get up and check on you. They see only the alarms you link them to.'
-            : `${accepted.length === 1 ? 'One person' : `${accepted.length} people`} will hear about it if you sleep through a linked alarm. Nothing else of yours is shared.`}
+            ? 'Pick someone who would actually get out of bed and check on you. They only see the alarms you link them to — nothing else.'
+            : 'They are told when you sleep through a linked alarm, and never anything else about your day.'}
         </Text>
       </View>
 
-      <View style={local.action}>
-        <PrimaryButton
-          label={inviting ? 'Not now' : 'Invite someone'}
-          icon={inviting ? Icons.close : Icons.userPlus}
-          disabled={!inviting && members.length >= MAX_CIRCLE}
-          onPress={() => {
-            setInviting((value) => !value);
-            setError(null);
-          }}
-        />
-      </View>
-
-      {inviting ? (
-        <Card>
-          <Text style={styles.cardTitle}>Who would you want on a bad morning?</Text>
-          <Text style={styles.cardDetail}>
-            They will need a ZO-ZAR account to accept. Nothing is shared until they do.
-          </Text>
-          <View style={local.inviteField}>
-            <TextField
-              label="Their email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="rahul@example.com"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              autoComplete="email"
-              returnKeyType="send"
-              onSubmitEditing={() => void invite()}
-              error={error}
-            />
-          </View>
-          <PrimaryButton label="Send the invitation" onPress={() => void invite()} disabled={!email.includes('@')} busy={busy} />
-        </Card>
+      {error ? (
+        <Text accessibilityRole="alert" style={local.error}>
+          {error}
+        </Text>
       ) : null}
 
-      {error && !inviting ? (
-        <Card style={{ backgroundColor: theme.errorSurface, borderColor: theme.error }}>
-          <Text accessibilityRole="alert" style={local.error}>
-            {error}
-          </Text>
-        </Card>
-      ) : null}
-
-      <View style={local.section}>
-        <SectionLabel>{accepted.length === 0 ? 'Connected' : `Connected, ${accepted.length} of ${MAX_CIRCLE}`}</SectionLabel>
-
-        {accepted.length === 0 ? (
-          <EmptyState
-            icon={Icons.users}
-            title="No one yet"
-            detail="Once someone accepts, you can message them here and link them to an alarm."
-          />
-        ) : (
-          accepted.map((member) => (
-            <Card key={member.id} style={local.personCard}>
-              <Touchable
-                accessibilityRole="button"
-                accessibilityLabel={`Open your conversation with ${member.name}`}
-                onPress={() => router.push(`/chat/${member.id}` as never)}
-                rippleColor={theme.surfaceStrong}
-                style={local.personRow}
-              >
-                <View style={[local.avatar, { backgroundColor: theme.warmSurface }]}>
-                  <Text style={local.avatarCharacter}>{deterministicAvatar(member.id || member.name)}</Text>
-                </View>
-                <View style={local.copy}>
-                  <Text style={styles.cardTitle}>{member.name}</Text>
-                  <Text style={styles.cardDetail}>{member.detail}</Text>
-                </View>
-                <Icon as={Icons.chevronRight} size={IconSize.md} color={theme.subtle} />
-              </Touchable>
-
-              <View style={local.permission}>
-                <Icon as={Icons.shield} size={IconSize.sm} color={theme.success} />
-                <Text style={local.permissionText}>Sees your linked wakes and whether you confirmed</Text>
+      {accepted.map((member) => (
+        <View key={member.id}>
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel={`Message ${member.name}`}
+            accessibilityHint="Long press to remove them from your circle"
+            onPress={() => router.push(`/chat/${member.id}` as never)}
+            onLongPress={() => setConfirming(member.id)}
+            rippleColor={theme.surfaceStrong}
+            style={local.person}
+          >
+            <View style={local.mark}>
+              <Text style={local.markCharacter}>{deterministicAvatar(member.name)}</Text>
+            </View>
+            <View style={local.personBody}>
+              <Text style={local.personName}>{member.name}</Text>
+              <Text style={local.personDetail}>{member.detail}</Text>
+              <View style={local.promise}>
+                <Icon as={Icons.shield} size={IconSize.sm} color={theme.warm} />
+                <Text style={local.promiseText}>Woken if you are not</Text>
               </View>
+            </View>
+          </Touchable>
 
-              {member.relationship === 'outgoing' ? (
+          {confirming === member.id ? (
+            <View style={local.confirm}>
+              <Text style={local.confirmText}>
+                Remove {member.name}? They stop hearing about your wakes.
+              </Text>
+              <View style={local.confirmRow}>
+                <Touchable
+                  accessibilityRole="button"
+                  accessibilityLabel="Keep things as they are"
+                  onPress={() => setConfirming(null)}
+                  rippleColor={theme.surfaceStrong}
+                  style={local.textAction}
+                >
+                  <Text style={local.keepText}>Keep</Text>
+                </Touchable>
                 <Touchable
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${member.name}`}
-                  onPress={() => setConfirming(member.id)}
+                  accessibilityState={{ busy: memberBusy === member.id }}
+                  disabled={memberBusy === member.id}
+                  onPress={() => void act(member, 'remove')}
                   rippleColor={theme.errorSurface}
-                  style={local.memberLink}
+                  style={local.textAction}
                 >
-                  <Text style={local.memberLinkText}>Remove</Text>
-                </Touchable>
-              ) : null}
-              <MemberConfirmation member={member} action="remove" />
-            </Card>
-          ))
-        )}
-      </View>
-
-      {pending.length > 0 ? (
-        <View style={local.section}>
-          <SectionLabel>Waiting</SectionLabel>
-          {pending.map((member) => (
-            <Card key={member.id} style={local.personCard}>
-              <View style={local.personRow}>
-                <View style={[local.avatar, { backgroundColor: theme.surfaceStrong }]}>
-                  <Text style={local.avatarCharacter}>{deterministicAvatar(member.id || member.name)}</Text>
-                </View>
-                <View style={local.copy}>
-                  <Text style={styles.cardTitle}>{member.name}</Text>
-                  <Text style={styles.cardDetail}>
-                    {member.relationship === 'incoming' ? 'Asked you to watch out for them' : 'Has not answered yet'}
+                  <Text style={local.removeText}>
+                    {memberBusy === member.id ? 'Removing…' : 'Remove'}
                   </Text>
-                </View>
+                </Touchable>
               </View>
+            </View>
+          ) : null}
+        </View>
+      ))}
 
-              {member.relationship === 'incoming' ? (
-                <View style={local.pendingActions}>
-                  <Touchable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Accept ${member.name}`}
-                    disabled={memberBusy === member.id}
-                    onPress={() => void runMemberAction(member, 'accept')}
-                    rippleColor={theme.accentContrast}
-                    style={local.acceptButton}
-                  >
-                    <Text style={local.acceptText}>{memberBusy === member.id ? 'Saving' : 'Accept'}</Text>
-                  </Touchable>
-                  <Touchable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Decline ${member.name}`}
-                    onPress={() => setConfirming(member.id)}
-                    rippleColor={theme.surfaceStrong}
-                    style={local.declineButton}
-                  >
-                    <Text style={local.declineText}>Decline</Text>
-                  </Touchable>
-                </View>
-              ) : (
+      {incoming.map((member) => (
+        <View key={member.id} style={local.letter}>
+          <View style={local.letterHead}>
+            <Icon as={Icons.letter} size={IconSize.md} color={theme.accent} />
+            <Text style={local.letterTitle}>{member.name} asked you</Text>
+          </View>
+          <Text style={local.letterBody}>
+            They want you to be the one who hears about it when they sleep through. You can say no.
+          </Text>
+          <View style={local.confirmRow}>
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel={`Decline ${member.name}`}
+              disabled={memberBusy === member.id}
+              onPress={() => void act(member, 'decline')}
+              rippleColor={theme.surfaceStrong}
+              style={local.textAction}
+            >
+              <Text style={local.keepText}>Not me</Text>
+            </Touchable>
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel={`Accept ${member.name}`}
+              accessibilityState={{ busy: memberBusy === member.id }}
+              disabled={memberBusy === member.id}
+              onPress={() => void act(member, 'accept')}
+              rippleColor={theme.surfaceStrong}
+              style={local.textAction}
+            >
+              <Text style={local.acceptText}>
+                {memberBusy === member.id ? 'Saving…' : "I'll do it"}
+              </Text>
+            </Touchable>
+          </View>
+        </View>
+      ))}
+
+      {outgoing.map((member) => (
+        <View key={member.id}>
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel={`Invitation to ${member.name}, waiting`}
+            accessibilityHint="Long press to cancel this invitation"
+            onLongPress={() => setConfirming(member.id)}
+            rippleColor={theme.surfaceStrong}
+            style={local.transit}
+          >
+            <View style={local.transitMark}>
+              <Icon as={Icons.letter} size={IconSize.md} color={theme.subtle} />
+            </View>
+            <View style={local.personBody}>
+              <Text style={local.transitName}>{member.name}</Text>
+              <Text style={local.personDetail}>Sent. Waiting for them to say yes.</Text>
+            </View>
+          </Touchable>
+
+          {confirming === member.id ? (
+            <View style={local.confirm}>
+              <Text style={local.confirmText}>Cancel the invitation to {member.name}?</Text>
+              <View style={local.confirmRow}>
+                <Touchable
+                  accessibilityRole="button"
+                  accessibilityLabel="Leave the invitation open"
+                  onPress={() => setConfirming(null)}
+                  rippleColor={theme.surfaceStrong}
+                  style={local.textAction}
+                >
+                  <Text style={local.keepText}>Leave it</Text>
+                </Touchable>
                 <Touchable
                   accessibilityRole="button"
                   accessibilityLabel={`Cancel the invitation to ${member.name}`}
-                  onPress={() => setConfirming(member.id)}
+                  disabled={memberBusy === member.id}
+                  onPress={() => void act(member, 'remove')}
                   rippleColor={theme.errorSurface}
-                  style={local.memberLink}
+                  style={local.textAction}
                 >
-                  <Text style={local.memberLinkText}>Cancel the invitation</Text>
+                  <Text style={local.removeText}>
+                    {memberBusy === member.id ? 'Cancelling…' : 'Cancel it'}
+                  </Text>
                 </Touchable>
-              )}
-              <MemberConfirmation member={member} action={member.relationship === 'incoming' ? 'decline' : 'remove'} />
-            </Card>
-          ))}
+              </View>
+            </View>
+          ) : null}
         </View>
-      ) : null}
+      ))}
 
-      <View style={local.section}>
-        <SectionLabel>What they can see</SectionLabel>
-        <Card>
-          <Text style={styles.cardDetail}>
-            A trusted person sees a wake time you linked them to, what it is for, and whether you confirmed. They do
-            not see your other alarms, your plan, or anything you have not linked.
+      {/*
+        One field, no button. The keyboard already has a send key, and a filled "Invite"
+        beside a single input is a button that exists only to look like a form.
+      */}
+      {full ? (
+        <Text style={local.limit}>
+          That is everyone. {MAX_CIRCLE} is the limit, so the people who get woken for you stay
+          people you would actually ask.
+        </Text>
+      ) : (
+        <View style={local.inviteBlock}>
+          <TextField
+            label="Ask someone"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="their@email.com"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            keyboardType="email-address"
+            returnKeyType="send"
+            onSubmitEditing={() => void invite()}
+          />
+          <Text style={local.inviteHint}>
+            {busy
+              ? 'Sending…'
+              : 'They need a ZO-ZAR account to accept, and get one message asking if they are willing. Nothing is shared until they say yes.'}
           </Text>
-        </Card>
-      </View>
+        </View>
+      )}
     </Screen>
   );
 }
 
-const makeLocal = (theme: Theme) =>
+const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    action: { alignSelf: 'flex-start', marginTop: Spacing.sm },
-    inviteField: { marginTop: Spacing.lg },
-    section: { marginTop: Spacing.xxl },
-    error: { ...Type.body, color: theme.error },
+    intro: { paddingTop: Spacing.xl, paddingBottom: Spacing.xl },
+    title: { ...Type.title, color: theme.text },
+    lede: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm, maxWidth: 440 },
+    error: { ...Type.callout, color: theme.error, marginBottom: Spacing.lg },
 
-    personCard: { paddingVertical: Spacing.md },
-    personRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-    avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    avatarCharacter: { fontSize: 20, lineHeight: 24 },
-    copy: { flex: 1, gap: 2 },
-
-    permission: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: theme.line,
-      paddingTop: Spacing.md,
-      marginTop: Spacing.md,
-    },
-    permissionText: { ...Type.caption, color: theme.textSecondary, flex: 1 },
-
-    memberLink: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start', marginTop: Spacing.xs },
-    memberLinkText: { ...Type.action, color: theme.error },
-
-    pendingActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
-    acceptButton: {
-      flex: 1,
-      minHeight: 48,
-      borderRadius: Radius.row,
+    person: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Spacing.lg, gap: Spacing.lg },
+    /** The person's initial, set large in warm ink — a mark, not an avatar chip. */
+    mark: {
+      width: 56,
+      height: 56,
+      borderRadius: Radius.pill,
+      borderWidth: 1,
+      borderColor: theme.warm,
+      backgroundColor: theme.warmSurface,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.accent,
-      overflow: 'hidden',
     },
-    acceptText: { ...Type.action, color: theme.accentContrast },
-    declineButton: {
-      flex: 1,
-      minHeight: 48,
-      borderRadius: Radius.row,
-      borderWidth: StyleSheet.hairlineWidth,
+    markCharacter: { ...Type.heading, color: theme.warm },
+    personBody: { flex: 1, paddingTop: Spacing.xs },
+    personName: { ...Type.heading, color: theme.text },
+    personDetail: { ...Type.caption, color: theme.subtle, marginTop: 2 },
+    promise: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.sm },
+    promiseText: { ...Type.caption, color: theme.warm },
+
+    /** An invitation that has arrived. Treated as a letter, because that is what it is. */
+    letter: {
+      borderWidth: 1,
       borderColor: theme.lineStrong,
+      borderRadius: Radius.card,
+      padding: Spacing.lg,
+      marginBottom: Spacing.lg,
+      backgroundColor: theme.surface,
+    },
+    letterHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    letterTitle: { ...Type.heading, color: theme.text },
+    letterBody: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm },
+
+    /** An invitation still travelling. Deliberately quieter than an accepted person. */
+    transit: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.lg, gap: Spacing.lg },
+    transitMark: {
+      width: 56,
+      height: 56,
+      borderRadius: Radius.pill,
+      borderWidth: 1,
+      borderColor: theme.lineStrong,
+      borderStyle: 'dashed',
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
     },
-    declineText: { ...Type.action, color: theme.text },
+    transitName: { ...Type.callout, color: theme.textSecondary },
 
-    confirmPanel: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+    confirm: {
+      borderTopWidth: 1,
       borderTopColor: theme.line,
       paddingTop: Spacing.md,
-      marginTop: Spacing.md,
-      gap: Spacing.md,
+      paddingBottom: Spacing.lg,
+      gap: Spacing.sm,
     },
-    confirmText: { ...Type.body, color: theme.textSecondary },
-    confirmActions: { flexDirection: 'row', gap: Spacing.sm },
-    destructiveButton: {
-      flex: 1,
-      minHeight: 48,
-      borderRadius: Radius.row,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.error,
-      overflow: 'hidden',
-    },
-    destructiveText: { ...Type.action, color: theme.accentContrast },
+    confirmText: { ...Type.callout, color: theme.text },
+    confirmRow: { flexDirection: 'row', gap: Spacing.xl, marginTop: Spacing.sm },
+    textAction: { minHeight: 48, justifyContent: 'center' },
+    keepText: { ...Type.action, color: theme.textSecondary },
+    acceptText: { ...Type.action, color: theme.accent },
+    removeText: { ...Type.action, color: theme.error },
+
+    inviteBlock: { paddingTop: Spacing.xl, gap: Spacing.sm },
+    inviteHint: { ...Type.caption, color: theme.subtle, maxWidth: 440 },
+    limit: { ...Type.caption, color: theme.subtle, paddingTop: Spacing.xl, maxWidth: 440 },
   });

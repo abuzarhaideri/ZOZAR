@@ -25,45 +25,50 @@ import { Platform, type TextStyle } from 'react-native';
  */
 export const Colors = {
   dark: {
-    // Base and elevated. Deep blue-black ink rather than neutral grey, so the warm amber
-    // accent reads as warm against it.
-    background: '#0D1117',
-    surface: '#161B22',
-    surfaceStrong: '#1F262F',
-    backgroundElement: '#161B22',
-    backgroundSelected: '#2A2218',
+    // Base and elevated. Warm brown-black rather than blue-black ink.
+    //
+    // Daylight's screen is amber paper lit by its own warm frontlight; nothing in that
+    // world is cool-toned. Shifting the base from #0D1117 (blue-black) to #100E0A moves
+    // every surface onto the same warm axis as the accent, so amber now reads as *more*
+    // of the room's light rather than as a colour laid on top of a cold one.
+    background: '#100E0A',
+    surface: '#1A1711',
+    surfaceStrong: '#26221A',
+    backgroundElement: '#1A1711',
+    backgroundSelected: '#2E2415',
 
     // Warm off-white; secondary and subtle both clear 4.5:1 on base and elevated.
-    text: '#F0EDE8',
-    textSecondary: '#AFB6BF',
-    muted: '#AFB6BF',
-    subtle: '#8B939E',
+    text: '#F4EFE4',
+    textSecondary: '#BCB2A2',
+    muted: '#BCB2A2',
+    subtle: '#9B9183',
 
-    line: '#262D36',
+    line: '#2B261D',
     // `line` is decorative — dividers and hairlines, carrying no information on its own.
     // `lineStrong` outlines inputs and other controls, so it is what identifies them as
     // interactive and has to clear 3:1 against the background it sits on.
-    lineStrong: '#5E646D',
+    lineStrong: '#6E6657',
 
-    // Sunrise amber. Light enough that it needs dark ink on top, which is why
-    // accentContrast is near-black rather than white.
+    // Sunrise amber, unchanged: it was already Daylight's hue, and the surfaces moved to
+    // meet it rather than the other way round. Light enough that it needs dark ink on
+    // top, which is why accentContrast is near-black rather than white.
     accent: '#F2A94B',
     accentContrast: '#1A1206',
 
     // An inverted card on a dark theme is *light*. The previous design hardcoded white
     // text on these surfaces, which would now be white on near-white, so the inverse set
     // carries its own secondary and line colours rather than leaving screens to guess.
-    inverseSurface: '#F0EDE8',
-    inverseText: '#14181E',
-    inverseTextSecondary: '#4A5056',
-    inverseLine: '#D4CEC5',
+    inverseSurface: '#F4EFE4',
+    inverseText: '#19150F',
+    inverseTextSecondary: '#4E4739',
+    inverseLine: '#D8CFBE',
 
-    success: '#74D39B',
-    successSurface: '#15291F',
+    success: '#86CE94',
+    successSurface: '#152318',
     warning: '#E8B866',
-    warningSurface: '#2B2214',
-    error: '#F08A8A',
-    errorSurface: '#2E1A1A',
+    warningSurface: '#2C2314',
+    error: '#F0908A',
+    errorSurface: '#2E1C18',
 
     // `warm` is the quiet companion to the accent for eyebrows and kickers, not a second
     // action color. AGENTS.md permits exactly one accent hue.
@@ -71,51 +76,53 @@ export const Colors = {
     warmSurface: '#241B12',
 
     focus: '#F2A94B',
-    scrim: 'rgba(3, 6, 10, 0.72)',
+    scrim: 'rgba(8, 6, 3, 0.74)',
   },
 
   light: {
-    // Warm, softened white rather than #FFFFFF, so the light mode is a sibling of the
-    // dark one rather than a different product.
-    background: '#FAF8F5',
-    surface: '#FFFFFF',
-    surfaceStrong: '#F1EDE7',
-    backgroundElement: '#FFFFFF',
-    backgroundSelected: '#FBEFDC',
+    // Warm paper, not white.
+    //
+    // Daylight's whole premise is a screen you can read in sunlight because it behaves
+    // like paper. #F5F0E4 is that paper. The previous #FAF8F5 was a cooled-down white,
+    // which is the one thing a sunlight-first reference is arguing against.
+    background: '#F5F0E4',
+    surface: '#FCF8EE',
+    surfaceStrong: '#EBE3D2',
+    backgroundElement: '#FCF8EE',
+    backgroundSelected: '#F7E7C8',
 
-    text: '#17181B',
-    textSecondary: '#5A5F67',
-    muted: '#5A5F67',
-    // Darkened from #73787F, which measured 4.20:1 and failed the small-text floor.
-    subtle: '#6A6F75',
+    text: '#1C1710',
+    textSecondary: '#5C5343',
+    muted: '#5C5343',
+    subtle: '#6A6050',
 
-    line: '#E4DFD8',
+    line: '#E0D7C4',
     // See the dark-mode note: this outlines controls, so it clears 3:1 rather than being
     // the near-invisible hairline it was.
-    lineStrong: '#8F8B85',
+    lineStrong: '#8C8372',
 
     // Deepened amber: the dark-mode value does not reach 4.5:1 against a light
     // background, so light mode uses a darker tone of the same hue.
-    accent: '#92540A',
-    accentContrast: '#FFFFFF',
+    accent: '#8A4E08',
+    accentContrast: '#FFFBF2',
 
-    inverseSurface: '#17181B',
-    inverseText: '#F7F5F2',
-    inverseTextSecondary: '#B4B8BE',
-    inverseLine: '#34363B',
+    inverseSurface: '#1C1710',
+    inverseText: '#F7F2E7',
+    inverseTextSecondary: '#B5AC9B',
+    inverseLine: '#39322A',
 
-    success: '#1C6B46',
-    successSurface: '#E4F2EA',
-    warning: '#7A5212',
-    warningSurface: '#FBEEDA',
-    error: '#A5302E',
-    errorSurface: '#FBE7E6',
+    success: '#1B6440',
+    successSurface: '#E3EEE2',
+    warning: '#744D0F',
+    warningSurface: '#F8EAD0',
+    error: '#9E2E26',
+    errorSurface: '#F8E4DE',
 
-    warm: '#8A5A22',
-    warmSurface: '#F7ECDF',
+    warm: '#82521C',
+    warmSurface: '#F3E8D6',
 
-    focus: '#92540A',
-    scrim: 'rgba(12, 10, 8, 0.44)',
+    focus: '#8A4E08',
+    scrim: 'rgba(28, 23, 16, 0.46)',
   },
 } as const;
 

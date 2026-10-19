@@ -37,6 +37,10 @@ import {
   Sunrise,
   UserPlus,
   Users,
+  Moon,
+  MailOpen,
+  Clock3,
+  RotateCw,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -87,20 +91,21 @@ export function Icon({
   );
 }
 
-/** @deprecated Emoji glyph, retained only until every screen has moved to `Icon`. */
-export function Glyph({ children, style }: { children: string; style?: object }) {
-  return (
-    <Text accessible={false} style={style}>
-      {children}
-    </Text>
-  );
-}
-
-const AVATAR_CHARACTERS = ['🌙', '🦉', '🦊', '🐼', '🌿', '🌞', '🌊', '🌄'] as const;
-
+/**
+ * A person's mark: the first letter of their name.
+ *
+ * This used to pick from ['🌙', '🦉', '🦊', '🐼', …] by hashing the id. Three problems,
+ * and the third is the one that matters. Emoji render differently on every Android
+ * version and font; they cannot take a colour, so the warm ink the People screen sets
+ * them in is simply ignored; and a fox assigned by a hash tells you nothing about who
+ * the person is, where their own initial tells you immediately.
+ *
+ * Falls back to a bullet rather than an empty box when a name is missing or begins with
+ * something that has no uppercase form.
+ */
 export function deterministicAvatar(seed: string) {
-  const hash = [...seed].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 7);
-  return AVATAR_CHARACTERS[hash % AVATAR_CHARACTERS.length];
+  const letter = seed.trim()[0];
+  return letter ? letter.toUpperCase() : '•';
 }
 
 export function Screen({
@@ -123,103 +128,6 @@ export function Screen({
     >
       {content}
     </SafeAreaView>
-  );
-}
-
-/**
- * The hero time.
- *
- * This is the one place the design raises its voice. A wake time is the only thing on
- * these screens that has to be legible at a glance, in the dark, by someone barely awake,
- * so it is set enormous and tabular and given no container at all — the darkness around
- * it does the framing. Wrapping it in a card would make it one more panel among panels.
- */
-export function HeroTime({
-  time,
-  label,
-  detail,
-  tone = 'default',
-}: {
-  time: string;
-  label?: string;
-  detail?: string;
-  tone?: 'default' | 'accent';
-}) {
-  const { theme, styles } = useZOZARTheme();
-  return (
-    <View style={styles.hero}>
-      {label ? <Text style={styles.heroLabel}>{label}</Text> : null}
-      <Text
-        style={[styles.heroTime, tone === 'accent' && { color: theme.accent }]}
-        // The clock reads as "zero six three zero" without this.
-        accessibilityLabel={`${time}`}
-        maxFontSizeMultiplier={1.4}
-      >
-        {time}
-      </Text>
-      {detail ? <Text style={styles.heroDetail}>{detail}</Text> : null}
-    </View>
-  );
-}
-
-/**
- * A list item.
- *
- * Rows, not cards. Chopping a list into identical rounded cards gives every item the
- * visual weight of a discrete object and makes a short list look like a dashboard. A row
- * separated by a hairline says "one of several of the same kind", which is what these are.
- */
-export function Row({
-  title,
-  detail,
-  value,
-  icon,
-  onPress,
-  trailing,
-  dimmed = false,
-  accessibilityLabel,
-}: {
-  title: string;
-  detail?: string;
-  value?: string;
-  icon?: LucideIcon;
-  onPress?: () => void;
-  trailing?: ReactNode;
-  dimmed?: boolean;
-  accessibilityLabel?: string;
-}) {
-  const { theme, styles } = useZOZARTheme();
-
-  const body = (
-    <View style={styles.listRow}>
-      {icon ? <Icon as={icon} size={IconSize.md} color={theme.subtle} /> : null}
-      <View style={styles.listCopy}>
-        <Text style={[styles.listTitle, dimmed && styles.listDone]} numberOfLines={2}>
-          {title}
-        </Text>
-        {detail ? (
-          <Text style={styles.listDetail} numberOfLines={1}>
-            {detail}
-          </Text>
-        ) : null}
-      </View>
-      {value ? <Text style={styles.listTime}>{value}</Text> : null}
-      {trailing}
-      {onPress && !trailing ? <Icon as={ChevronRight} size={IconSize.md} color={theme.subtle} /> : null}
-    </View>
-  );
-
-  if (!onPress) return body;
-
-  return (
-    <Touchable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? title}
-      onPress={onPress}
-      rippleColor={theme.surfaceStrong}
-    >
-      {body}
-    </Touchable>
   );
 }
 
@@ -321,22 +229,6 @@ export function PrimaryButton({
           <Text style={styles.primaryText}>{label}</Text>
         </>
       )}
-    </Touchable>
-  );
-}
-
-export function SecondaryButton({ label, onPress, icon }: { label: string; onPress?: () => void; icon?: LucideIcon }) {
-  const { theme, styles } = useZOZARTheme();
-  return (
-    <Touchable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      rippleColor={theme.surfaceStrong}
-      style={styles.secondaryButton}
-    >
-      {icon ? <Icon as={icon} size={IconSize.md} color={theme.text} /> : null}
-      <Text style={styles.secondaryText}>{label}</Text>
     </Touchable>
   );
 }
@@ -476,8 +368,8 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
     <View style={styles.brandBar}>
       <Touchable
         accessibilityRole="button"
-        accessibilityLabel="Go to home"
-        onPress={() => router.replace('/home' as never)}
+        accessibilityLabel="Go to tonight"
+        onPress={() => router.replace('/tonight' as never)}
         rippleColor={theme.surfaceStrong}
         borderless
         style={styles.brandRow}
@@ -570,7 +462,15 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
               ))}
             </View>
 
-            <SecondaryButton label="Close" onPress={() => setAccountOpen(false)} />
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel="Close account settings"
+              rippleColor={theme.surfaceStrong}
+              onPress={() => setAccountOpen(false)}
+              style={styles.signOutButton}
+            >
+              <Text style={styles.secondaryText}>Close</Text>
+            </Touchable>
             <Touchable
               accessibilityRole="button"
               accessibilityLabel="Sign out"
@@ -614,6 +514,10 @@ export const Icons = {
   plus: Plus,
   send: Send,
   shield: ShieldCheck,
+  moon: Moon,
+  letter: MailOpen,
+  clock: Clock3,
+  refresh: RotateCw,
 } as const;
 
 function makeUIStyles(theme: Theme) {

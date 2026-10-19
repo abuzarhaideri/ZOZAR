@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, useFonts } from '@expo-google-fonts/manrope';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppearanceProvider, useAppearance } from '@/components/appearance-provider';
 import { ZOZARStoreProvider } from '@/components/zo-zar-store';
@@ -26,5 +27,15 @@ function AppProviders() {
 }
 
 export default function RootLayout() {
-  return <AppearanceProvider><AppProviders /></AppearanceProvider>;
+  // GestureHandlerRootView has to wrap everything, and it has to be here rather than
+  // inside a screen. Without it the night spine's drag silently does nothing: the
+  // gesture never gets a chance to activate, nothing throws, and the alarm just refuses
+  // to move. Flex 1 is required — the default is zero-height and collapses the app.
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppearanceProvider>
+        <AppProviders />
+      </AppearanceProvider>
+    </GestureHandlerRootView>
+  );
 }
