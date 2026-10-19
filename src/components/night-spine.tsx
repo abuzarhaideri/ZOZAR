@@ -245,6 +245,8 @@ export function WakeBlock({
    */
   const commitRef = useRef(onCommitMinutes);
   commitRef.current = onCommitMinutes;
+  const pressRef = useRef(onPress);
+  pressRef.current = onPress;
 
   function commit(delta: number) {
     setPreview(null);
@@ -254,6 +256,10 @@ export function WakeBlock({
   /** Cleared on cancel as well as on release — see `onFinalize`. */
   function clearPreview() {
     setPreview(null);
+  }
+
+  function openEditor() {
+    pressRef.current?.();
   }
 
   const pan = useMemo(
@@ -293,6 +299,30 @@ export function WakeBlock({
     [base, lifted, offset, snapped],
   );
 
+  /**
+   * The tap is a gesture, not a Pressable inside the GestureDetector.
+   *
+   * Nesting a Pressable was the first attempt, and finishing a drag then fired the press
+   * as well: you dragged the alarm to a new time and the app threw you into the
+   * wake-confirmation screen. `minDistance` stops the pan from *starting* on a tap, but
+   * it does nothing to stop a child Pressable seeing the click at the end of a drag.
+   *
+   * Exclusive gives the pan priority. A tap never travels 8px so it cannot claim a drag,
+   * and a drag has already won arbitration by the time the finger lifts, so it cannot
+   * emit a press.
+   */
+  const tap = useMemo(
+    () =>
+      Gesture.Tap()
+        .maxDuration(280)
+        .onEnd((_event, success) => {
+          if (success && pressRef.current) runOnJS(openEditor)();
+        }),
+    [],
+  );
+
+  const composed = useMemo(() => Gesture.Exclusive(pan, tap), [pan, tap]);
+
   const dragStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: offset.value }],
     opacity: 1 - lifted.value * 0.08,
@@ -303,9 +333,10 @@ export function WakeBlock({
   const dragging = preview !== null;
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={composed}>
       <Animated.View style={dragStyle}>
-        <Touchable
+        <View
+          accessible
           accessibilityRole="adjustable"
           accessibilityLabel={`Wake at ${shown}`}
           accessibilityValue={{ text: shown }}
@@ -313,13 +344,16 @@ export function WakeBlock({
           accessibilityActions={[
             { name: 'increment', label: 'Five minutes later' },
             { name: 'decrement', label: 'Five minutes earlier' },
+            { name: 'activate', label: 'Open this alarm' },
           ]}
           onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === 'increment') commit(SNAP_MINUTES);
-            if (event.nativeEvent.actionName === 'decrement') commit(-SNAP_MINUTES);
+            const action = event.nativeEvent.actionName;
+            if (action === 'increment') commit(SNAP_MINUTES);
+            if (action === 'decrement') commit(-SNAP_MINUTES);
+            // TalkBack's double tap arrives here rather than as a press, because the tap
+            // is now a gesture the accessibility tree cannot see.
+            if (action === 'activate') onPress?.();
           }}
-          onPress={onPress}
-          rippleColor={theme.surfaceStrong}
         >
           <View style={local.row}>
             <View style={local.gutter}>
@@ -373,7 +407,7 @@ export function WakeBlock({
               </Text>
             </View>
           </View>
-        </Touchable>
+        </View>
       </Animated.View>
     </GestureDetector>
   );

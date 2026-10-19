@@ -64,3 +64,4 @@ infra/node_modules/
 # Design reference scraped from other products. Local only: it is 18MB of third-party
 # artwork, it never ships in the app, and it must not enter this repo history.
 design/
+.playwright-mcp/

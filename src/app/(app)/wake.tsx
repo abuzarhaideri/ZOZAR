@@ -198,35 +198,45 @@ export default function WakeRoute() {
         const healthy = scheduledState?.status === 'scheduled';
 
         return (
-          <Touchable
-            key={plan.id}
-            accessibilityRole="button"
-            accessibilityLabel={`${plan.time} alarm, ${plan.repeatLabel}, ${live ? 'on' : 'paused'}`}
-            accessibilityHint="Opens this alarm to edit, test or delete it"
-            onPress={() => openEditor(plan)}
-            rippleColor={theme.surfaceStrong}
-            style={wake.row}
-          >
-            <View
-              style={[
-                wake.capsule,
-                { height: Math.min(96, Math.max(48, plan.graceMinutes * 1.6)) },
-                !live && wake.capsulePaused,
-              ]}
+          /*
+            The switch is a sibling of the Touchable, not a child of it.
+            
+            Nested first, which meant toggling an alarm also fired the row and threw the
+            editor open over the top — the control did its job and then something else
+            happened as well. A touch target inside another touch target is always this
+            bug waiting to happen, so the row's tappable region stops where the switch
+            begins.
+          */
+          <View key={plan.id} style={wake.row}>
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel={`${plan.time} alarm, ${plan.repeatLabel}, ${live ? 'on' : 'paused'}`}
+              accessibilityHint="Opens this alarm to edit, test or delete it"
+              onPress={() => openEditor(plan)}
+              rippleColor={theme.surfaceStrong}
+              style={wake.rowTap}
             >
-              <View style={[wake.capsuleCap, !live && wake.capsuleCapPaused]} />
-            </View>
+              <View
+                style={[
+                  wake.capsule,
+                  { height: Math.min(96, Math.max(48, plan.graceMinutes * 1.6)) },
+                  !live && wake.capsulePaused,
+                ]}
+              >
+                <View style={[wake.capsuleCap, !live && wake.capsuleCapPaused]} />
+              </View>
 
-            <View style={wake.rowBody}>
-              <Text style={[wake.time, !live && wake.timePaused]}>{plan.time}</Text>
-              <Text style={wake.repeat}>{plan.repeatLabel}</Text>
-              <Text style={wake.fact}>
-                {unprotected ? 'Nobody is told if you miss it' : `${plan.protectedBy} is told if you miss it`}
-              </Text>
-              <Text style={[wake.fact, { color: live && !healthy ? theme.warning : theme.subtle }]}>
-                {deviceStatusLabel(plan, scheduledState)}
-              </Text>
-            </View>
+              <View style={wake.rowBody}>
+                <Text style={[wake.time, !live && wake.timePaused]}>{plan.time}</Text>
+                <Text style={wake.repeat}>{plan.repeatLabel}</Text>
+                <Text style={wake.fact}>
+                  {unprotected ? 'Nobody is told if you miss it' : `${plan.protectedBy} is told if you miss it`}
+                </Text>
+                <Text style={[wake.fact, { color: live && !healthy ? theme.warning : theme.subtle }]}>
+                  {deviceStatusLabel(plan, scheduledState)}
+                </Text>
+              </View>
+            </Touchable>
 
             <Switch
               accessibilityLabel={`${live ? 'Pause' : 'Turn on'} the ${plan.time} alarm`}
@@ -236,7 +246,7 @@ export default function WakeRoute() {
               trackColor={{ false: theme.lineStrong, true: theme.accent }}
               thumbColor={theme.surface}
             />
-          </Touchable>
+          </View>
         );
       })}
 
@@ -403,10 +413,11 @@ const makeWakeStyles = (theme: Theme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.lg,
-      paddingVertical: Spacing.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.line,
     },
+    /** The tappable region: everything up to, but not including, the switch. */
+    rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.lg, paddingVertical: Spacing.lg },
     /** The same capsule as the spine's wake block, so one alarm reads as one object. */
     capsule: {
       width: 20,

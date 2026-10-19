@@ -26,6 +26,22 @@ import { Fonts, Radius, Spacing, Type, type Theme } from '@/constants/theme';
  * entirely to atmosphere, which is appropriate because it is the one screen with nothing
  * to do on it. One action, set quiet and low, the way Endel sets "Start".
  */
+/**
+ * Matches the kicker on Tonight, and is computed rather than assumed.
+ *
+ * The first version of this screen said "Evening" unconditionally, which greeted a 2am
+ * user with the wrong half of the day — the same sin as the mood copy it replaced, just
+ * quieter. If the app cannot be accurate about the hour it is displaying, it should not
+ * mention the hour.
+ */
+function dayPart(hour: number) {
+  if (hour < 4) return 'Late';
+  if (hour < 12) return 'Morning';
+  if (hour < 17) return 'Afternoon';
+  if (hour < 21) return 'Evening';
+  return 'Tonight';
+}
+
 export default function WelcomeRoute() {
   const { theme } = useZOZARTheme();
   const local = useMemo(() => makeStyles(theme), [theme]);
@@ -75,7 +91,9 @@ export default function WelcomeRoute() {
           arrive, which is the point: nothing here is worth waiting for.
         */}
         <Arrive style={local.middle}>
-          <Text style={local.greeting}>Evening, {firstName}</Text>
+          <Text style={local.greeting}>
+            {dayPart(now.getHours())}, {firstName}
+          </Text>
           <Text
             accessibilityRole="header"
             style={[local.time, !wake && local.timeEmpty]}

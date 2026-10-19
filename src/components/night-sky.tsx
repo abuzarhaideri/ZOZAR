@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useAppearance } from '@/components/appearance-provider';
 import type { Theme } from '@/constants/theme';
 
 /**
@@ -82,10 +83,20 @@ function seeded(seed: number) {
 
 type LayerSpec = { crest: number; amplitude: number; periods: number; phase: number; opacity: number; seconds: number };
 
+/**
+ * Crests live in the top 45% of the field, and nothing is drawn below `ART_FLOOR`.
+ *
+ * The first build put them at 0.46/0.62/0.79, which ran a hairline straight through the
+ * middle of a sentence — decorative art crossing body copy, which is the one thing
+ * atmosphere is never allowed to do. Keeping the art above the headline block is a
+ * constraint on the component, not something each screen has to lay out around.
+ */
+const ART_FLOOR = 0.62;
+
 const LAYERS: LayerSpec[] = [
-  { crest: 0.46, amplitude: 0.055, periods: 1.2, phase: 0.0, opacity: 0.1, seconds: 150 },
-  { crest: 0.62, amplitude: 0.045, periods: 1.6, phase: 2.1, opacity: 0.16, seconds: 96 },
-  { crest: 0.79, amplitude: 0.038, periods: 2.1, phase: 4.3, opacity: 0.24, seconds: 48 },
+  { crest: 0.2, amplitude: 0.05, periods: 1.2, phase: 0.0, opacity: 0.1, seconds: 150 },
+  { crest: 0.3, amplitude: 0.042, periods: 1.6, phase: 2.1, opacity: 0.16, seconds: 96 },
+  { crest: 0.42, amplitude: 0.034, periods: 2.1, phase: 4.3, opacity: 0.24, seconds: 48 },
 ];
 
 function Layer({ spec, width, height, theme }: { spec: LayerSpec; width: number; height: number; theme: Theme }) {
@@ -107,15 +118,31 @@ function Layer({ spec, width, height, theme }: { spec: LayerSpec; width: number;
   }, [drift, reduced, span, spec.seconds]);
 
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: drift.value }] }));
+  const floor = height * ART_FLOOR;
   const paths = useMemo(
-    () => crestPath(width * OVERSCAN, height, height * spec.crest, height * spec.amplitude, spec.periods, spec.phase),
-    [height, spec.amplitude, spec.crest, spec.periods, spec.phase, width],
+    () => crestPath(width * OVERSCAN, floor, height * spec.crest, height * spec.amplitude, spec.periods, spec.phase),
+    [floor, height, spec.amplitude, spec.crest, spec.periods, spec.phase, width],
   );
+  const gradientId = `sky-${Math.round(spec.crest * 1000)}`;
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-      <Svg width={width * OVERSCAN} height={height}>
-        <Path d={paths.filled} fill={theme.text} opacity={spec.opacity * 0.5} />
+      <Svg width={width * OVERSCAN} height={floor}>
+        {/*
+          The fill fades out before the field ends.
+          
+          Without this the filled shape stops dead at the container's edge and draws a
+          hard tonal seam right across the screen — which reads as a rendering bug, not
+          as sky. AGENTS.md bans gradients as decoration; this one is structural, and it
+          is confined to the single surface that rule already exempts.
+        */}
+        <Defs>
+          <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={theme.text} stopOpacity={spec.opacity * 0.5} />
+            <Stop offset="1" stopColor={theme.text} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Path d={paths.filled} fill={`url(#${gradientId})`} />
         <Path d={paths.crest} stroke={theme.text} strokeWidth={1} fill="none" opacity={spec.opacity + 0.18} />
       </Svg>
     </Animated.View>
@@ -126,6 +153,8 @@ function Layer({ spec, width, height, theme }: { spec: LayerSpec; width: number;
 function Particles({ width, height, theme }: { width: number; height: number; theme: Theme }) {
   const reduced = useReducedMotion();
   const fall = useSharedValue(0);
+  /** Specks fall only through the band the crests occupy, never across the copy below. */
+  const band = height * ART_FLOOR;
 
   useEffect(() => {
     if (reduced) {
@@ -133,8 +162,8 @@ function Particles({ width, height, theme }: { width: number; height: number; th
       return;
     }
     fall.value = 0;
-    fall.value = withRepeat(withTiming(height, { duration: 34_000, easing: Easing.linear }), -1, false);
-  }, [fall, height, reduced]);
+    fall.value = withRepeat(withTiming(band, { duration: 34_000, easing: Easing.linear }), -1, false);
+  }, [band, fall, reduced]);
 
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: fall.value }] }));
 
@@ -142,20 +171,20 @@ function Particles({ width, height, theme }: { width: number; height: number; th
     const random = seeded(90210);
     return Array.from({ length: 26 }, () => ({
       x: random() * width,
-      y: random() * height - height,
+      y: random() * band - band,
       length: 3 + random() * 7,
       opacity: 0.1 + random() * 0.26,
     }));
-  }, [height, width]);
+  }, [band, width]);
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-      <Svg width={width} height={height * 2}>
+      <Svg width={width} height={band * 2}>
         {specks.map((speck, index) => (
           <Rect
             key={index}
             x={speck.x}
-            y={speck.y + height}
+            y={speck.y + band}
             width={1}
             height={speck.length}
             fill={theme.text}
@@ -175,19 +204,22 @@ function Particles({ width, height, theme }: { width: number; height: number; th
  * as vector art.
  */
 function Grain({ width, height, theme }: { width: number; height: number; theme: Theme }) {
+  const band = height * ART_FLOOR;
   const specks = useMemo(() => {
     const random = seeded(1312);
-    return Array.from({ length: 210 }, () => ({
+    return Array.from({ length: 150 }, () => ({
       x: random() * width,
-      y: random() * height,
+      // Biased toward the top: squaring a uniform value clusters it near zero, so the
+      // grain thins out as it approaches the copy rather than stopping at a visible line.
+      y: random() ** 2 * band,
       size: random() > 0.82 ? 2 : 1,
       opacity: 0.03 + random() * 0.07,
     }));
-  }, [height, width]);
+  }, [band, width]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Svg width={width} height={height}>
+      <Svg width={width} height={band}>
         {specks.map((speck, index) => (
           <Rect
             key={index}
@@ -210,6 +242,21 @@ function Grain({ width, height, theme }: { width: number; height: number; theme:
  */
 export function NightSky({ theme, height = 240 }: { theme: Theme; height?: number }) {
   const { width } = useWindowDimensions();
+  const { resolvedAppearance } = useAppearance();
+
+  /**
+   * Grain and falling specks are a night device, and only a night device.
+   *
+   * On deep ink they read as film grain and drifting dust in a dark room. On Daylight's
+   * warm paper the identical marks read as a dirty screen — flecks of dark on cream look
+   * like dust on the glass, and the falling specks look like scratches. The waves survive
+   * the translation because a faint contour line on paper is a landscape; the particulate
+   * does not, so light mode simply does without it.
+   *
+   * This is the sort of thing a palette swap cannot fix, because the failure is in what
+   * the texture *depicts*, not in its contrast.
+   */
+  const night = resolvedAppearance === 'dark';
 
   return (
     <View
@@ -222,8 +269,8 @@ export function NightSky({ theme, height = 240 }: { theme: Theme; height?: numbe
       {LAYERS.map((spec) => (
         <Layer key={spec.crest} spec={spec} width={width} height={height} theme={theme} />
       ))}
-      <Particles width={width} height={height} theme={theme} />
-      <Grain width={width} height={height} theme={theme} />
+      {night ? <Particles width={width} height={height} theme={theme} /> : null}
+      {night ? <Grain width={width} height={height} theme={theme} /> : null}
     </View>
   );
 }
