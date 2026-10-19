@@ -1,56 +1,111 @@
-# Welcome to your Expo app 👋
+# ZO-ZAR
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+An Android alarm app for people who sleep through alarms. You commit to waking at a time,
+and a trusted person is notified if you don't confirm within your grace period. Alarms fire
+through a project-local native Android module so they ring exactly on time, with a
+full-screen intent, through Doze and after a reboot.
 
-## Get started
+## Status
 
-1. Install dependencies
+The backend is being migrated from Appwrite onto infrastructure this project owns. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the decision record.
 
-   ```bash
-   npm install
-   ```
+| Area | State |
+| --- | --- |
+| Database schema, migrations | Done, verified against PostgreSQL 17 |
+| Authentication, token rotation | Done, tested |
+| Authorization rules | Done, tested |
+| Wake recurrence and escalation logic | Done, tested, daylight-saving aware |
+| CI | Done |
+| Remaining API routes | In progress |
+| WebSocket realtime, scheduled worker | Not started |
+| AWS CDK infrastructure | Not started |
+| Appwrite data migration | Not started |
+| App switched onto the new API | Not started |
+| UI redesign | Not started |
 
-2. Start the app
+## Stack
 
-   ```bash
-   npx expo start
-   ```
+**App** — Expo SDK 57, Expo Router, React Native 0.86, TypeScript. Android only; there is
+no web build. Precise alarms live in `modules/zo-zar-exact-alarm`.
 
-In the output, you'll find options to open the app in a
+**API** — Node 22 on AWS Lambda, Hono router behind an API Gateway HTTP API. Aiven for
+PostgreSQL via Drizzle. S3 for voice notes and profile photos. API Gateway WebSockets for
+chat realtime. EventBridge Scheduler for materialising alarms, escalating missed wakes, and
+expiring messages. Firebase is used for FCM delivery and nothing else.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+**Infrastructure** — AWS CDK in TypeScript. GitHub Actions runs typecheck, unit tests, and
+the migrations against a throwaway Postgres; deploys are gated on all of it passing.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### The interesting constraint
 
-## Get a fresh project
+Aiven's free PostgreSQL plan permits 20 connections and has no PgBouncer, and RDS Proxy
+cannot front a non-AWS database. Lambda holds a connection per warm container, so the
+deployment runs on an explicit connection budget: every function uses a `pg` pool of
+`max: 1` and carries a reserved-concurrency ceiling that sums to the limit. Lambdas also
+run outside a VPC, because a VPC would need a NAT gateway costing more per month than the
+rest of the stack combined. The full budget is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-When you're ready, run:
+## Layout
 
-```bash
-npm run reset-project
+```
+src/              Expo app. Routes under src/app/, Expo Router file-based.
+modules/          Native Android exact-alarm module.
+server/           API, WebSocket, and worker Lambdas. Independent npm project.
+infra/            AWS CDK app. Independent npm project.
+docs/             Architecture decision record.
+appwrite/         Legacy backend, retained until the migration completes.
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+`server/` and `infra/` are deliberately not npm workspaces: Metro watches the repository
+root, and hoisted dependencies would end up in the app's module graph. `metro.config.js`
+blocks both.
 
-### Other setup steps
+## Running it
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### App
 
-## Learn more
+```bash
+npm install
+npm run android        # a development build; Expo Go cannot load the native alarm module
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### API
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+cd server
+npm install
+cp .env.example .env   # then fill in DATABASE_URL and JWT_SECRET
+npm test               # unit tests; integration tests skip without DATABASE_URL
+npm run typecheck
+```
 
-## Join the community
+To run the integration tests, point `DATABASE_URL` at a throwaway database. Containers
+serve no TLS certificate, so disable it explicitly:
 
-Join our community of developers creating universal apps.
+```bash
+docker run -d --name zozar-pg -e POSTGRES_USER=zozar -e POSTGRES_PASSWORD=zozar \
+  -e POSTGRES_DB=zozar_test -p 55432:5432 postgres:17-alpine
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+export DATABASE_URL='postgres://zozar:zozar@localhost:55432/zozar_test?sslmode=disable'
+npm run db:migrate
+npm test
+```
+
+Never point these at the Aiven database. The tests truncate tables.
+
+### Database changes
+
+Migrations are generated from the Drizzle schema and committed, never pushed from the
+schema directly, so the SQL that CI validates is the SQL that runs in production:
+
+```bash
+cd server
+npm run db:generate -- --name=what_changed
+npm run db:migrate
+```
+
+## Licence
+
+See [LICENSE](LICENSE).

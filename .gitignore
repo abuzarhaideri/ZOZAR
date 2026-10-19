@@ -56,3 +56,7 @@ example
 # generated native folders
 /ios
 /android
+
+# Backend projects are independent npm installs
+server/node_modules/
+infra/node_modules/

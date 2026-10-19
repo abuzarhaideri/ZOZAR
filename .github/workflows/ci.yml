@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A superseded run has nothing useful to say, so cancel it rather than pay for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    services:
+      # A throwaway Postgres, not Aiven. CI must never touch the real database, and the
+      # migrations have to prove they apply to an empty server from scratch.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zozar
+          POSTGRES_PASSWORD: zozar
+          POSTGRES_DB: zozar_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U zozar"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Local container, so TLS verification is neither available nor meaningful here.
+      # Production refuses to start without DATABASE_CA_CERT; see src/db/client.ts.
+      DATABASE_URL: postgres://zozar:zozar@localhost:5432/zozar_test?sslmode=disable
+      JWT_SECRET: ci-only-secret-value-at-least-32-bytes-long
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches the Lambda runtime, so CI type-checks against what actually ships.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Migrations apply to an empty database
+        run: npm run db:migrate
+
+      - name: Migrations are idempotent
+        # Re-running must be a no-op. If this fails, a migration is not safe to retry
+        # after a partial deploy.
+        run: npm run db:migrate
+
+  app:
+    name: App typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
