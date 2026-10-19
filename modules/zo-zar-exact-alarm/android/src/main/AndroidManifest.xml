@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+
+  <application>
+    <activity android:name="expo.modules.zozarexactalarm.ZoZarAlarmActivity" android:excludeFromRecents="true" android:exported="false" android:launchMode="singleTask" android:showWhenLocked="true" android:turnScreenOn="true" android:theme="@style/ZoZarAlarmTheme" />
+    <service android:name="expo.modules.zozarexactalarm.ZoZarAlarmService" android:exported="false" android:foregroundServiceType="mediaPlayback" android:stopWithTask="false" />
+    <receiver android:name="expo.modules.zozarexactalarm.ZoZarAlarmReceiver" android:exported="false" />
+    <receiver android:name="expo.modules.zozarexactalarm.ZoZarBootReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
+  </application>
+</manifest>

@@ -1,0 +1,39 @@
+project_id = "zo-zar"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["zozar://auth/callback"]
+enable_signup = true
+
+[auth.sessions]
+# Match the app's seven-day inactivity policy for local Supabase development.
+inactivity_timeout = "168h"
+
+[edge_runtime]
+enabled = true
+
+[analytics]
+enabled = false

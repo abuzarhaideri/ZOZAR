@@ -1,0 +1,10 @@
+{
+  "name": "zozar-actions",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/main.js",
+  "dependencies": {
+    "google-auth-library": "^10.3.0",
+    "node-appwrite": "^20.0.0"
+  }
+}

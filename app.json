@@ -1,42 +1,90 @@
 {
   "expo": {
-    "name": "ZOZAR",
-    "slug": "ZOZAR",
-    "version": "1.0.0",
+    "name": "ZO-ZAR",
+    "slug": "zo-zar",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "zozar",
+    "icon": "./assets/images/zo-zar-icon-flat.png",
+    "scheme": "zo-zar",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/zo-zar-icon-flat.png"
     },
     "android": {
+      "package": "com.zozar.app",
+      "versionCode": 5,
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.ACCESS_NOTIFICATION_POLICY",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+        ,"android.permission.USE_FULL_SCREEN_INTENT"
+        ,"android.permission.FOREGROUND_SERVICE"
+        ,"android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        ,"android.permission.RECEIVE_BOOT_COMPLETED"
+        ,"android.permission.VIBRATE"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0B1018",
+        "foregroundImage": "./assets/images/zo-zar-mark-flat.png",
+        "monochromeImage": "./assets/images/zo-zar-mark-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/zo-zar-favicon-flat.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F5F7FA",
+          "image": "./assets/images/zo-zar-mark-flat.png",
+          "imageWidth": 92,
+          "dark": {
+            "backgroundColor": "#0B1018",
+            "image": "./assets/images/zo-zar-mark-flat.png"
+          }
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/zo-zar-mark-monochrome.png",
+          "color": "#356DFF",
+          "defaultChannel": "zo-zar-wake-alarms-v3-zozar",
+          "sounds": [
+            "./assets/audio/bright_rise.wav",
+            "./assets/audio/steady_pulse.wav",
+            "./assets/audio/summit_siren.wav"
+          ]
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow ZO-ZAR to record short voice messages.",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f838dbf1-98cc-4318-a755-4cf43c87e6c9"
+      }
+    },
+    "owner": "abuzarhaideri"
   }
 }

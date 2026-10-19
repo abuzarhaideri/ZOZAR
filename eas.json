@@ -1,0 +1,21 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "environment": "preview",
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ANDROID_PACKAGE": "com.zozar.app",
+        "EXPO_PUBLIC_APPWRITE_PROJECT_ID": "6ab3b3be00371b1f265f",
+        "EXPO_PUBLIC_APPWRITE_DATABASE_ID": "zozar",
+        "EXPO_PUBLIC_APPWRITE_STORAGE_BUCKET_ID": "zozar-private",
+        "EXPO_PUBLIC_APPWRITE_ACTIONS_FUNCTION_ID": "zozar-actions"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}

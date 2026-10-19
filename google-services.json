@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "334915995016",
+    "project_id": "zo-zar",
+    "storage_bucket": "zo-zar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:334915995016:android:a89deeabf207f094f1263d",
+        "android_client_info": {
+          "package_name": "com.zozar.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeDtTmAKyT2E3KtmdNYu4fTsGzeIC60R4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

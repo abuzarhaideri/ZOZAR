@@ -2,6 +2,8 @@
 
 # dependencies
 node_modules/
+# Installed agent skills are restored from skills-lock.json.
+.agents/skills/
 
 # Expo
 .expo/
@@ -32,6 +34,19 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+.env.*
+!.env.example
+
+# backend CLI state and server credentials
+supabase/.temp/
+supabase/.branches/
+**/*service-account*.json
+**/*firebase-adminsdk*.json
+
+# generated release artifacts
+*.apk
+*.aab
 
 # typescript
 *.tsbuildinfo
