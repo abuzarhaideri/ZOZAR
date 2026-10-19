@@ -4,6 +4,8 @@ import { cors } from 'hono/cors';
 
 import { verifyAccessToken, bearerFromHeader } from '@/auth/tokens';
 import { authRoutes } from '@/routes/auth';
+import { commitmentRoutes } from '@/routes/commitments';
+import { wakeOccurrenceRoutes, wakePlanRoutes } from '@/routes/wake';
 import { unauthorized, type AppEnv } from '@/lib/http';
 
 export function createApp() {
@@ -34,6 +36,9 @@ export function createApp() {
   });
 
   app.get('/v1/me', (c) => c.json({ session: c.get('session') }));
+  app.route('/v1/commitments', commitmentRoutes);
+  app.route('/v1/wake-plans', wakePlanRoutes);
+  app.route('/v1/wake-occurrences', wakeOccurrenceRoutes);
 
   app.notFound(() => Response.json({ error: { code: 'not_found', message: 'Not found.' } }, { status: 404 }));
 
