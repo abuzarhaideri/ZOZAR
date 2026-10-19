@@ -7,6 +7,7 @@ import { canChangeRetention, canReadThread, canSendMessage, type Session } from 
 import { retentionExpiry } from '@/domain/schedule';
 import { enforce, notFound, parseBody, type AppEnv } from '@/lib/http';
 import { session, uuidParam } from '@/lib/resources';
+import { publishQuietly } from '@/realtime/publish';
 
 export const chatRoutes = new Hono<AppEnv>();
 
@@ -145,6 +146,14 @@ chatRoutes.post('/threads/:id/messages', async (c) => {
       expiresAt: retentionExpiry(thread.retention),
     })
     .returning(MESSAGE_COLUMNS);
+
+  // Fire-and-forget: the message is already stored, and a realtime failure must not turn
+  // a successful send into an error. Clients catch up on their next fetch regardless.
+  await publishQuietly({
+    type: 'message.created',
+    threadId: id,
+    payload: { messageId: created?.id ?? '', senderId: current.userId },
+  });
 
   return c.json({ message: created }, 201);
 });

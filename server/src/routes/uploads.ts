@@ -8,6 +8,7 @@ import { canReadKey, canWriteKey, extensionForContentType, parseKey, profilePhot
 import { retentionExpiry } from '@/domain/schedule';
 import { badRequest, notFound, parseBody, type AppEnv } from '@/lib/http';
 import { session, uuidParam } from '@/lib/resources';
+import { publishQuietly } from '@/realtime/publish';
 import {
   MAX_PHOTO_BYTES,
   MAX_VOICE_BYTES,
@@ -201,6 +202,12 @@ uploadRoutes.post('/voice-note', async (c) => {
       createdAt: schema.messages.createdAt,
       expiresAt: schema.messages.expiresAt,
     });
+
+  await publishQuietly({
+    type: 'message.created',
+    threadId: parsed.threadId,
+    payload: { messageId: created?.id ?? '', senderId: current.userId },
+  });
 
   return c.json({ message: created }, 201);
 });
