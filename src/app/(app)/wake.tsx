@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 
@@ -13,14 +13,16 @@ import {
   BrandBar,
   Card,
   EmptyState,
-  Glyph,
+  Icon,
   Pill,
   PrimaryButton,
   Screen,
-  SectionHeader,
+  SectionLabel,
   useZOZARTheme,
   Icons,
 } from '@/components/zo-zar-ui';
+import { Touchable } from '@/components/motion';
+import { IconSize, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { useZOZARStore, type WakePlan } from '@/components/zo-zar-store';
 import { getWakePermissionStatus } from '@/services/permission-onboarding';
 import { scheduleWakeSoundTest } from '@/services/notification-service';
@@ -37,15 +39,16 @@ function localTime(value: Date) {
 }
 
 function deviceStatusLabel(plan: WakePlan, status?: { status: 'scheduled' | 'not-scheduled' | 'error'; error?: string }) {
-  if (plan.status !== 'Active') return 'Paused · not scheduled on this device';
-  if (!status) return 'Active · checking device schedule';
-  if (status.status === 'scheduled') return 'Scheduled on this device';
-  if (status.status === 'error') return `Not scheduled · ${status.error ?? 'review permissions'}`;
-  return 'Not scheduled · review permissions';
+  if (plan.status !== 'Active') return 'Paused, so it will not ring.';
+  if (!status) return 'Checking this phone.';
+  if (status.status === 'scheduled') return 'Set on this phone.';
+  if (status.status === 'error') return status.error ?? 'This phone will not ring it. Check permissions.';
+  return 'This phone will not ring it. Check permissions.';
 }
 
 export default function WakeRoute() {
   const { styles, theme } = useZOZARTheme();
+  const wake = useMemo(() => makeWakeStyles(theme), [theme]);
   const {
     wakePlans,
     commitments,
@@ -143,107 +146,248 @@ export default function WakeRoute() {
     }
   }
 
-  return <Screen>
-    <BrandBar />
-    <View style={styles.intro}>
-      <Text style={styles.eyebrow}>Wake · Protection</Text>
-      <Text style={styles.pageTitle}>Wake with intention.</Text>
-      <Text style={styles.lede}>Create up to three independent alarms. Each one can have its own time, challenge, and trusted-person protection.</Text>
-    </View>
+  return (
+    <Screen>
+      <BrandBar />
 
-    <SectionHeader
-      kicker="Your alarms"
-      title={`${wakePlans.length}/${MAX_WAKE_PLANS} saved`}
-      action={wakePlans.length >= MAX_WAKE_PLANS ? 'Limit reached' : undefined}
-    />
-    <PrimaryButton
-      label={wakePlans.length >= MAX_WAKE_PLANS ? 'Three alarms saved' : 'Create alarm'}
-      icon={Icons.plus}
-      disabled={wakePlans.length >= MAX_WAKE_PLANS}
-      onPress={() => openEditor(null)}
-    />
+      <View style={styles.intro}>
+        <Text accessibilityRole="header" style={styles.pageTitle}>
+          Your alarms
+        </Text>
+        <Text style={styles.lede}>
+          Up to three. Each has its own time, its own challenge, and its own person to tell.
+        </Text>
+      </View>
 
-    {wakePlans.length === 0 && <EmptyState
-      icon={Icons.alarm}
-      title="No alarms yet"
-      detail="Create a one-time, daily, or weekday alarm. New alarms start paused so you can review them before they ring."
-    />}
+      <PrimaryButton
+        label={wakePlans.length >= MAX_WAKE_PLANS ? 'Three is the limit' : 'Add an alarm'}
+        icon={Icons.plus}
+        disabled={wakePlans.length >= MAX_WAKE_PLANS}
+        onPress={() => openEditor(null)}
+      />
 
-    {wakePlans.map((plan) => {
-      const scheduledState = deviceSchedule[plan.id];
-      const isBusy = busyId === plan.id;
-      return <Card key={plan.id} style={{ padding: 16 }}>
-        <View style={styles.kickerRow}>
-          <Text style={styles.sectionKicker}>Wake alarm</Text>
-          <Pill label={plan.status} tone={plan.status === 'Active' ? 'success' : 'neutral'} />
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 5 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.wakeHeroTime, { color: theme.text }]}>{plan.time}</Text>
-            <Text style={styles.cardDetail}>{plan.repeatLabel} · {plan.difficulty} challenge</Text>
+      {wakePlans.length === 0 ? (
+        <EmptyState
+          icon={Icons.alarm}
+          title="No alarms yet"
+          detail="New alarms start paused, so you can check the time and the challenge before one actually rings."
+        />
+      ) : null}
+
+      {wakePlans.map((plan) => {
+        const scheduledState = deviceSchedule[plan.id];
+        const isBusy = busyId === plan.id;
+        const live = plan.status === 'Active';
+        const unprotected = plan.protectedBy === 'No trusted person yet';
+
+        return (
+          <Card key={plan.id} style={wake.planCard}>
+            {/* The time leads. Everything else on this card explains it. */}
+            <View style={wake.planHead}>
+              <Text style={wake.planTime}>{plan.time}</Text>
+              <Pill label={live ? 'On' : 'Paused'} tone={live ? 'success' : 'neutral'} />
+            </View>
+
+            <Text style={wake.planRepeat}>{plan.repeatLabel}</Text>
+
+            <View style={wake.facts}>
+              <Text style={wake.fact}>
+                {unprotected ? 'No one is told if you miss it' : `${plan.protectedBy} is told if you miss it`}
+              </Text>
+              <Text style={wake.fact}>
+                {plan.difficulty} challenge, {plan.graceMinutes} minutes to confirm
+              </Text>
+              <Text style={[wake.fact, { color: scheduledState?.status === 'scheduled' ? theme.success : theme.warning }]}>
+                {deviceStatusLabel(plan, scheduledState)}
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={wake.controlRow}>
+              <View style={wake.switchBox}>
+                <Text style={wake.switchLabel}>{live ? 'Ringing as set' : 'Paused'}</Text>
+                <Switch
+                  accessibilityLabel={`${live ? 'Pause' : 'Turn on'} the ${plan.time} alarm`}
+                  disabled={isBusy}
+                  value={live}
+                  onValueChange={() => void runForPlan(plan.id, () => toggleWakePlan(plan.id))}
+                  trackColor={{ false: theme.lineStrong, true: theme.accent }}
+                  thumbColor={theme.surface}
+                />
+              </View>
+              <Touchable
+                accessibilityRole="button"
+                accessibilityLabel={`Edit the ${plan.time} alarm`}
+                onPress={() => openEditor(plan)}
+                rippleColor={theme.surfaceStrong}
+                style={wake.editButton}
+              >
+                <Text style={wake.editLabel}>Edit</Text>
+              </Touchable>
+            </View>
+
+            <View style={wake.secondaryRow}>
+              <Touchable
+                accessibilityRole="button"
+                accessibilityLabel="Hear this alarm sound"
+                disabled={isBusy}
+                onPress={() => void runForPlan(plan.id, () => testWakeAlarm(plan.id))}
+                rippleColor={theme.surfaceStrong}
+                style={[wake.quietButton, isBusy && styles.disabled]}
+              >
+                <Text style={wake.quietLabel}>Hear it</Text>
+              </Touchable>
+              <Touchable
+                accessibilityRole="button"
+                accessibilityLabel="Try the wake challenge now"
+                disabled={!plan.occurrenceId}
+                onPress={() => plan.occurrenceId && router.push(`/wake/${plan.occurrenceId}?practice=1` as never)}
+                rippleColor={theme.surfaceStrong}
+                style={[wake.quietButton, !plan.occurrenceId && styles.disabled]}
+              >
+                <Text style={wake.quietLabel}>Try the challenge</Text>
+              </Touchable>
+            </View>
+
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel={deleteId === plan.id ? 'Keep this alarm' : 'Delete this alarm'}
+              onPress={() => setDeleteId(deleteId === plan.id ? null : plan.id)}
+              rippleColor={theme.errorSurface}
+              style={wake.deleteToggle}
+            >
+              <Text style={wake.deleteToggleLabel}>{deleteId === plan.id ? 'Keep it' : 'Delete'}</Text>
+            </Touchable>
+
+            {deleteId === plan.id ? (
+              <View style={wake.confirmDelete}>
+                <Text style={styles.cardDetail}>
+                  This removes the alarm and stops it ringing on this phone. It cannot be undone.
+                </Text>
+                <Touchable
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete this alarm permanently"
+                  onPress={() =>
+                    void runForPlan(plan.id, async () => {
+                      await deleteWakePlan(plan.id);
+                      setDeleteId(null);
+                    })
+                  }
+                  rippleColor={theme.background}
+                  style={wake.deleteConfirmButton}
+                >
+                  <Text style={wake.deleteConfirmLabel}>Delete the alarm</Text>
+                </Touchable>
+              </View>
+            ) : null}
+          </Card>
+        );
+      })}
+
+      <Modal visible={editorOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeEditor}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'bottom', 'left', 'right']}>
+          <View style={wake.sheetHeader}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={closeEditor} style={wake.sheetCancel}>
+              <Text style={styles.actionText}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.cardTitle}>{editingId ? 'Edit alarm' : 'New alarm'}</Text>
+            <View style={{ width: 48 }} />
           </View>
-          <Glyph style={{ color: theme.text, fontSize: 26 }}>◷</Glyph>
-        </View>
-        <Text style={styles.cardDetail}>{plan.protectedBy === 'No trusted person yet' ? 'No trusted person linked' : `Protected by ${plan.protectedBy}`} · {plan.graceMinutes} minute grace period.</Text>
-        <Text style={[styles.cardDetail, { color: scheduledState?.status === 'scheduled' ? theme.success : theme.muted }]}>{deviceStatusLabel(plan, scheduledState)}</Text>
-        <View style={styles.divider} />
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-          <View style={{ flex: 1, minHeight: 50, paddingHorizontal: 12, borderRadius: 14, backgroundColor: theme.surfaceStrong, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{plan.status === 'Active' ? 'Alarm active' : 'Alarm paused'}</Text>
-            <Switch accessibilityLabel={`${plan.status === 'Active' ? 'Pause' : 'Activate'} ${plan.time} alarm`} disabled={isBusy} value={plan.status === 'Active'} onValueChange={() => void runForPlan(plan.id, () => toggleWakePlan(plan.id))} trackColor={{ false: theme.lineStrong, true: theme.accent }} thumbColor="#FFFFFF" />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Edit ${plan.time} alarm`}
-            onPress={() => openEditor(plan)}
-            style={({ pressed }) => [{ minHeight: 50, paddingHorizontal: 18, borderRadius: 14, borderWidth: 1, borderColor: theme.lineStrong, alignItems: 'center', justifyContent: 'center' }, pressed && styles.pressed]}
+          <ScrollView
+            contentContainerStyle={wake.sheetBody}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>Edit</Text>
-          </Pressable>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={isBusy}
-            onPress={() => void runForPlan(plan.id, () => testWakeAlarm(plan.id))}
-            style={({ pressed }) => [{ flex: 1, minHeight: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceStrong }, pressed && styles.pressed, isBusy && styles.disabled]}
-          >
-            <Text style={{ color: theme.text, fontSize: 12, fontWeight: '700' }}>Test alarm sound</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={!plan.occurrenceId}
-            onPress={() => plan.occurrenceId && router.push(`/wake/${plan.occurrenceId}?practice=1` as never)}
-            style={({ pressed }) => [{ flex: 1, minHeight: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceStrong, opacity: plan.occurrenceId ? 1 : 0.45 }, pressed && styles.pressed]}
-          >
-            <Text style={{ color: theme.text, fontSize: 12, fontWeight: '700' }}>Practice challenge</Text>
-          </Pressable>
-        </View>
-        <Pressable accessibilityRole="button" onPress={() => setDeleteId(deleteId === plan.id ? null : plan.id)} style={{ minHeight: 38, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '600' }}>{deleteId === plan.id ? 'Cancel delete' : 'Delete alarm'}</Text>
-        </Pressable>
-        {deleteId === plan.id && <View style={{ borderTopWidth: 1, borderTopColor: theme.line, paddingTop: 12 }}>
-          <Text style={styles.cardDetail}>Delete this alarm and cancel its device notifications? This cannot be undone.</Text>
-          <Pressable accessibilityRole="button" onPress={() => void runForPlan(plan.id, async () => { await deleteWakePlan(plan.id); setDeleteId(null); })} style={{ minHeight: 48, borderRadius: 14, marginTop: 10, backgroundColor: theme.error, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: theme.inverseText, fontSize: 13, fontWeight: '700' }}>Delete permanently</Text>
-          </Pressable>
-        </View>}
-      </Card>;
-    })}
+            <AlarmEditor
+              key={editingId ?? 'new'}
+              initialValue={alarmConfig}
+              commitments={commitments}
+              members={members}
+              onSave={saveAlarm}
+              onPreviewSound={previewAlarmSound}
+            />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
-    <Modal visible={editorOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeEditor}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'bottom', 'left', 'right']}>
-        <View style={{ minHeight: 64, borderBottomWidth: 1, borderBottomColor: theme.line, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Pressable accessibilityRole="button" onPress={closeEditor} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={styles.actionText}>Cancel</Text></Pressable>
-          <Text style={styles.cardTitle}>{editingId ? 'Edit alarm' : 'New alarm'}</Text>
-          <View style={{ width: 48 }} />
-        </View>
-        <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 22, paddingBottom: 40 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <AlarmEditor key={editingId ?? 'new'} initialValue={alarmConfig} commitments={commitments} members={members} onSave={saveAlarm} onPreviewSound={previewAlarmSound} />
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-
-    {error && <Card style={{ borderColor: theme.error, backgroundColor: theme.errorSurface, padding: 14 }}><Text style={{ color: theme.error, fontSize: 13, lineHeight: 19 }}>{error}</Text>{/permission|exact-alarm|notification|do not disturb|device/i.test(error) && <Pressable accessibilityRole="button" onPress={() => router.push('/permissions' as never)} style={{ minHeight: 44, justifyContent: 'center', marginTop: 4 }}><Text style={{ color: theme.error, fontSize: 13, fontWeight: '700' }}>Fix wake permissions →</Text></Pressable>}</Card>}
-  </Screen>;
+      {error ? (
+        <Card style={{ borderColor: theme.error, backgroundColor: theme.errorSurface }}>
+          <Text style={{ ...Type.body, color: theme.error }}>{error}</Text>
+          {/permission|exact-alarm|notification|do not disturb|device/i.test(error) ? (
+            <Touchable
+              accessibilityRole="button"
+              accessibilityLabel="Review wake permissions"
+              onPress={() => router.push('/permissions' as never)}
+              rippleColor={theme.error}
+              style={wake.errorAction}
+            >
+              <Text style={{ ...Type.action, color: theme.error }}>Review permissions</Text>
+              <Icon as={Icons.chevronRight} size={IconSize.md} color={theme.error} />
+            </Touchable>
+          ) : null}
+        </Card>
+      ) : null}
+    </Screen>
+  );
 }
+
+const makeWakeStyles = (theme: Theme) =>
+  StyleSheet.create({
+  planCard: { padding: Spacing.xl },
+  planHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+    planTime: { ...Type.clockSmall, color: theme.text },
+    planRepeat: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.xs },
+  facts: { gap: Spacing.xs, marginTop: Spacing.lg },
+    fact: { ...Type.caption, color: theme.textSecondary },
+  controlRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  switchBox: {
+    flex: 1,
+    minHeight: 52,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.row,
+    backgroundColor: theme.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+    switchLabel: { ...Type.callout, color: theme.text },
+  editButton: {
+    minHeight: 52,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: Radius.row,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+    editLabel: { ...Type.action, color: theme.text },
+  secondaryRow: { flexDirection: 'row', gap: Spacing.sm },
+  quietButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: Radius.tight,
+    backgroundColor: theme.surfaceStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+    quietLabel: { ...Type.caption, color: theme.text },
+  deleteToggle: { minHeight: 48, justifyContent: 'center', alignItems: 'center', marginTop: Spacing.xs },
+    deleteToggleLabel: { ...Type.caption, color: theme.textSecondary },
+  confirmDelete: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line, paddingTop: Spacing.md, gap: Spacing.md },
+  deleteConfirmButton: { minHeight: 52, borderRadius: Radius.row, backgroundColor: theme.error, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    deleteConfirmLabel: { ...Type.action, color: theme.accentContrast },
+  sheetHeader: {
+    minHeight: 64,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.line,
+    paddingHorizontal: Spacing.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetCancel: { minHeight: 48, justifyContent: 'center' },
+  sheetBody: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, paddingBottom: Spacing.xxxl },
+  errorAction: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, minHeight: 48 },
+  });

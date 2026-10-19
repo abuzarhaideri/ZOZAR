@@ -23,6 +23,8 @@ import {
   ChevronDown,
   ChevronRight,
   ListChecks,
+  Pencil,
+  Trash2,
   X,
   Mic,
   Plus,
@@ -590,6 +592,8 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
 export const Icons = {
   alarm: AlarmClock,
   close: X,
+  edit: Pencil,
+  trash: Trash2,
   listChecks: ListChecks,
   sun: Sunrise,
   userPlus: UserPlus,
