@@ -1,4 +1,4 @@
-import { useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -10,7 +10,7 @@ import Animated, {
 
 import { Touchable } from '@/components/motion';
 import { Icon, Icons, useZOZARTheme } from '@/components/zo-zar-ui';
-import { IconSize, Motion, Radius, Spacing, Type, type Theme } from '@/constants/theme';
+import { Motion, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 
 /**
  * The night spine.
@@ -237,9 +237,23 @@ export function WakeBlock({
   const snapped = useSharedValue(0);
   const [preview, setPreview] = useState<number | null>(null);
 
+  /**
+   * The gesture is memoised, so whatever it captures is frozen until its deps change.
+   * `onCommitMinutes` is an inline arrow in the parent and is therefore a new function
+   * on every render, which a memoised gesture would never see again. Routing the call
+   * through a ref means the drag always commits against the current handler.
+   */
+  const commitRef = useRef(onCommitMinutes);
+  commitRef.current = onCommitMinutes;
+
   function commit(delta: number) {
     setPreview(null);
-    if (delta !== 0) onCommitMinutes(((base + delta) % 1440 + 1440) % 1440);
+    if (delta !== 0) commitRef.current(((base + delta) % 1440 + 1440) % 1440);
+  }
+
+  /** Cleared on cancel as well as on release — see `onFinalize`. */
+  function clearPreview() {
+    setPreview(null);
   }
 
   const pan = useMemo(
@@ -269,6 +283,10 @@ export function WakeBlock({
           offset.value = withTiming(0, { duration: Motion.fast });
           lifted.value = withTiming(0, { duration: Motion.fast });
           snapped.value = 0;
+          // onEnd does not run when a gesture is cancelled — by a system interruption,
+          // or by the scroll view taking the touch. Without this, the preview time
+          // stays on screen and the block claims an alarm time that was never saved.
+          runOnJS(clearPreview)();
         }),
     // `commit` closes over `base`, so the gesture is rebuilt when the committed time moves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -426,5 +444,3 @@ const makeStyles = (theme: Theme) =>
 const styles = StyleSheet.create({
   spine: { marginTop: Spacing.xl },
 });
-
-export { IconSize };

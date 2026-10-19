@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import Animated, {
@@ -93,7 +93,7 @@ function Layer({ spec, width, height, theme }: { spec: LayerSpec; width: number;
   const drift = useSharedValue(0);
   const span = width * (OVERSCAN - 1);
 
-  useMemo(() => {
+  useEffect(() => {
     if (reduced) {
       drift.value = 0;
       return;
@@ -127,7 +127,7 @@ function Particles({ width, height, theme }: { width: number; height: number; th
   const reduced = useReducedMotion();
   const fall = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     if (reduced) {
       fall.value = 0;
       return;
