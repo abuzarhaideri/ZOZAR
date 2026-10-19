@@ -116,3 +116,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Verify palette contrast
+        # A palette is the easiest part of a design system to break quietly: nudging a hex
+        # value to taste can drop a label below the legibility floor and nothing looks
+        # wrong on a bright monitor.
+        run: npm run verify:contrast

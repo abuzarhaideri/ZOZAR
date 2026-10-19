@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AlarmDatePicker, AlarmTimePicker, formatAlarmTime } from '@/components/alarm-time-picker';
 import { useZOZARStore, type Commitment } from '@/components/zo-zar-store';
 import { BrandBar, Card, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
-import { Fonts } from '@/constants/theme';
+import { Fonts, type Theme } from '@/constants/theme';
 
 function initialDate() {
   const value = new Date();
@@ -35,6 +35,7 @@ function dateHeading(iso: string) {
 
 export default function PlanRoute() {
   const { styles, theme } = useZOZARTheme();
+  const local = useMemo(() => makeLocal(theme), [theme]);
   const { commitments, toggleCommitment, addCommitment, updateCommitment, deleteCommitment, hydrationError, retryHydration, isHydrating } = useZOZARStore();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -120,6 +121,7 @@ export default function PlanRoute() {
   </Screen>;
 }
 
-const local = StyleSheet.create({
-  primaryAction: { alignSelf: 'flex-start', marginBottom: 28 }, error: { fontFamily: Fonts.medium, fontSize: 13, lineHeight: 19, marginBottom: 14 }, group: { marginBottom: 18 }, dayHeading: { fontFamily: Fonts.bold, fontSize: 13, fontWeight: '700', marginBottom: 9 }, listCard: { paddingVertical: 0 }, row: { minHeight: 76, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }, rowMain: { flex: 1, minWidth: 190, minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: 12 }, check: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, checkText: { color: '#FFFFFF', fontWeight: '800' }, copy: { flex: 1 }, title: { fontFamily: Fonts.semibold, fontSize: 15, lineHeight: 20, fontWeight: '700' }, done: { textDecorationLine: 'line-through' }, detail: { fontFamily: Fonts.regular, fontSize: 12, lineHeight: 18, marginTop: 3 }, editButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, moreButton: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }, deletePanel: { width: '100%', borderTopWidth: 1, paddingVertical: 13 }, deleteActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 }, cancelDelete: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }, confirmDelete: { minHeight: 44, borderRadius: 12, paddingHorizontal: 18, justifyContent: 'center' }, confirmDeleteText: { color: '#FFFFFF', fontWeight: '700' }, modalHeader: { minHeight: 64, borderBottomWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerAction: { width: 58, minHeight: 48, justifyContent: 'center' }, editor: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
-});
+const makeLocal = (theme: Theme) =>
+  StyleSheet.create({
+  primaryAction: { alignSelf: 'flex-start', marginBottom: 28 }, error: { fontFamily: Fonts.medium, fontSize: 13, lineHeight: 19, marginBottom: 14 }, group: { marginBottom: 18 }, dayHeading: { fontFamily: Fonts.bold, fontSize: 13, fontWeight: '700', marginBottom: 9 }, listCard: { paddingVertical: 0 }, row: { minHeight: 76, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }, rowMain: { flex: 1, minWidth: 190, minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: 12 }, check: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, checkText: { color: theme.accentContrast, fontWeight: '800' }, copy: { flex: 1 }, title: { fontFamily: Fonts.semibold, fontSize: 15, lineHeight: 20, fontWeight: '700' }, done: { textDecorationLine: 'line-through' }, detail: { fontFamily: Fonts.regular, fontSize: 12, lineHeight: 18, marginTop: 3 }, editButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, moreButton: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }, deletePanel: { width: '100%', borderTopWidth: 1, paddingVertical: 13 }, deleteActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 }, cancelDelete: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }, confirmDelete: { minHeight: 44, borderRadius: 12, paddingHorizontal: 18, justifyContent: 'center' }, confirmDeleteText: { color: theme.accentContrast, fontWeight: '700' }, modalHeader: { minHeight: 64, borderBottomWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerAction: { width: 58, minHeight: 48, justifyContent: 'center' }, editor: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
+  });

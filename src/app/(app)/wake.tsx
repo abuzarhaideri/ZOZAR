@@ -224,7 +224,7 @@ export default function WakeRoute() {
         {deleteId === plan.id && <View style={{ borderTopWidth: 1, borderTopColor: theme.line, paddingTop: 12 }}>
           <Text style={styles.cardDetail}>Delete this alarm and cancel its device notifications? This cannot be undone.</Text>
           <Pressable accessibilityRole="button" onPress={() => void runForPlan(plan.id, async () => { await deleteWakePlan(plan.id); setDeleteId(null); })} style={{ minHeight: 48, borderRadius: 14, marginTop: 10, backgroundColor: theme.error, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Delete permanently</Text>
+            <Text style={{ color: theme.inverseText, fontSize: 13, fontWeight: '700' }}>Delete permanently</Text>
           </Pressable>
         </View>}
       </Card>;

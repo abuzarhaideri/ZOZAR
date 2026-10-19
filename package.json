@@ -59,7 +59,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "build:android:preview": "npx eas-cli build --platform android --profile preview",
-    "appwrite:provision": "node ./scripts/provision-appwrite.mjs"
+    "appwrite:provision": "node ./scripts/provision-appwrite.mjs",
+    "verify:contrast": "node ./scripts/verify-contrast.mjs"
   },
   "overrides": {
     "react-native-appwrite": {

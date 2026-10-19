@@ -1,15 +1,16 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useZOZARStore, type CircleMember } from '@/components/zo-zar-store';
 import { BrandBar, Card, deterministicAvatar, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
-import { Fonts } from '@/constants/theme';
+import { Fonts, type Theme } from '@/constants/theme';
 
 const MAX_CIRCLE = 3;
 
 export default function PeopleRoute() {
   const { styles, theme } = useZOZARTheme();
+  const local = useMemo(() => makeLocal(theme), [theme]);
   const { members, addMember, respondToInvitation, removeMember } = useZOZARStore();
   const [inviting, setInviting] = useState(false);
   const [email, setEmail] = useState('');
@@ -126,12 +127,13 @@ export default function PeopleRoute() {
   </Screen>;
 }
 
-const local = StyleSheet.create({
+const makeLocal = (theme: Theme) =>
+  StyleSheet.create({
   circleCard: { flexDirection: 'row', alignItems: 'center', gap: 18, paddingVertical: 22 },
   orbits: { width: 92, height: 92, alignItems: 'center', justifyContent: 'center' },
   orbit: { position: 'absolute', width: 88, height: 88, borderRadius: 44, borderWidth: 1 },
   core: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  coreText: { color: '#FFFFFF', fontFamily: Fonts.bold, fontSize: 21, fontWeight: '700' },
+  coreText: { color: theme.accentContrast, fontFamily: Fonts.bold, fontSize: 21, fontWeight: '700' },
   circleCopy: { flex: 1 },
   action: { alignSelf: 'flex-start', marginTop: 8 },
   inviteField: { marginTop: 18 },
@@ -155,6 +157,6 @@ const local = StyleSheet.create({
   confirmActions: { flexDirection: 'row', gap: 10 },
   smallButton: { minHeight: 44, minWidth: 96, paddingHorizontal: 16, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   smallButtonText: { fontFamily: Fonts.semibold, fontSize: 13, fontWeight: '700' },
-  destructiveText: { color: '#FFFFFF', fontFamily: Fonts.semibold, fontSize: 13, fontWeight: '700' },
+  destructiveText: { color: theme.accentContrast, fontFamily: Fonts.semibold, fontSize: 13, fontWeight: '700' },
   error: { fontFamily: Fonts.medium, fontSize: 13, lineHeight: 19 },
-});
+  });

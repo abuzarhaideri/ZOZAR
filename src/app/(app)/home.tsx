@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlarmTimePicker, formatAlarmTime } from '@/components/alarm-time-picker';
 import { useZOZARStore } from '@/components/zo-zar-store';
 import { BrandBar, Card, EmptyState, PrimaryButton, Screen, SectionHeader, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
-import { Fonts } from '@/constants/theme';
+import { Fonts, type Theme } from '@/constants/theme';
 
 function defaultCommitmentTime() {
   const value = new Date();
@@ -23,6 +23,7 @@ function greeting() {
 
 export default function HomeRoute() {
   const { theme, styles } = useZOZARTheme();
+  const local = useMemo(() => makeLocal(theme), [theme]);
   const { userName, commitments, wakePlans, deviceSchedule, members, hydrationError, toggleCommitment, addCommitment, retryHydration } = useZOZARStore();
   const [composerOpen, setComposerOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -101,8 +102,9 @@ export default function HomeRoute() {
   </Screen>;
 }
 
-const local = StyleSheet.create({
+const makeLocal = (theme: Theme) =>
+  StyleSheet.create({
   flex: { flex: 1 }, intro: { paddingTop: 26, paddingBottom: 26 }, date: { fontFamily: Fonts.semibold, fontSize: 13, fontWeight: '700', marginBottom: 10 }, greeting: { fontFamily: Fonts.bold, fontSize: 38, lineHeight: 43, fontWeight: '700', letterSpacing: -1.4 }, lede: { fontFamily: Fonts.regular, fontSize: 16, lineHeight: 24, marginTop: 10 },
   wakeCard: { padding: 20, marginBottom: 6 }, heroTop: { flexDirection: 'row', alignItems: 'center', gap: 11 }, statusMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, heroKicker: { fontFamily: Fonts.bold, fontSize: 11, fontWeight: '700', letterSpacing: 1.3 }, heroStatus: { fontFamily: Fonts.regular, fontSize: 12, marginTop: 2 }, manageButton: { minHeight: 44, paddingHorizontal: 8, justifyContent: 'center' }, wakeTime: { fontFamily: Fonts.bold, fontSize: 58, lineHeight: 66, fontWeight: '700', letterSpacing: -2.7, marginTop: 22 }, wakeTitle: { fontFamily: Fonts.semibold, fontSize: 19, lineHeight: 24, fontWeight: '700', marginTop: 2 }, rule: { height: 1, marginVertical: 20 }, detailGrid: { flexDirection: 'row', gap: 12 }, detailItem: { flex: 1, minWidth: 0 }, detailLabel: { fontFamily: Fonts.bold, fontSize: 10, letterSpacing: 1 }, detailValue: { fontFamily: Fonts.medium, fontSize: 12, lineHeight: 17, fontWeight: '600', marginTop: 6 }, emptyWake: { gap: 14, paddingTop: 22 },
-  sectionTop: { marginTop: 30 }, listCard: { paddingVertical: 0 }, commitmentRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12 }, check: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, checkText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' }, rowTitle: { fontFamily: Fonts.semibold, fontSize: 15, fontWeight: '700' }, rowDetail: { fontFamily: Fonts.regular, fontSize: 12, marginTop: 3 }, rowTime: { fontFamily: Fonts.mono, fontSize: 12 }, actionPair: { flexDirection: 'row', gap: 10, marginTop: 2 }, quickAction: { flex: 1, minHeight: 52, borderWidth: 1, borderRadius: 16, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 8 }, quickSymbol: { fontFamily: Fonts.semibold, fontSize: 20 }, quickText: { flexShrink: 1, fontFamily: Fonts.semibold, fontSize: 13, fontWeight: '700' }, personRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12 }, personAvatar: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, personInitials: { fontFamily: Fonts.bold, fontSize: 13, fontWeight: '700' }, chevron: { fontSize: 26 }, inlineAction: { minHeight: 48, alignSelf: 'flex-start', justifyContent: 'center', marginTop: 10 },
-});
+  sectionTop: { marginTop: 30 }, listCard: { paddingVertical: 0 }, commitmentRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12 }, check: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, checkText: { color: theme.accentContrast, fontSize: 13, fontWeight: '800' }, rowTitle: { fontFamily: Fonts.semibold, fontSize: 15, fontWeight: '700' }, rowDetail: { fontFamily: Fonts.regular, fontSize: 12, marginTop: 3 }, rowTime: { fontFamily: Fonts.mono, fontSize: 12 }, actionPair: { flexDirection: 'row', gap: 10, marginTop: 2 }, quickAction: { flex: 1, minHeight: 52, borderWidth: 1, borderRadius: 16, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 8 }, quickSymbol: { fontFamily: Fonts.semibold, fontSize: 20 }, quickText: { flexShrink: 1, fontFamily: Fonts.semibold, fontSize: 13, fontWeight: '700' }, personRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12 }, personAvatar: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, personInitials: { fontFamily: Fonts.bold, fontSize: 13, fontWeight: '700' }, chevron: { fontSize: 26 }, inlineAction: { minHeight: 48, alignSelf: 'flex-start', justifyContent: 'center', marginTop: 10 },
+  });
