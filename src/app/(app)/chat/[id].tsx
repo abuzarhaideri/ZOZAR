@@ -72,7 +72,7 @@ export default function ChatRoute() {
       <KeyboardAvoidingView style={chat.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={chat.column}>
           <View style={chat.topBar}>
-            {/* Reached from both Tonight and People, so the label names no destination. */}
+            {/* Reached from both Wake and People, so the label names no destination. */}
             <BackButton label="Back" />
             <Touchable
               accessibilityRole="button"

@@ -157,8 +157,8 @@ export default function PlanRoute() {
 
   return (
     <Screen>
-      {/* Reached from Tonight, not a tab, so it carries its own way back. */}
-      <BackButton label="Tonight" />
+      {/* Reached from Wake, not a tab, so it carries its own way back. */}
+      <BackButton label="Wake" />
 
       <View style={local.intro}>
         <Text accessibilityRole="header" style={local.title}>

@@ -81,7 +81,7 @@ export default function WelcomeRoute() {
   // stated, not hidden, because this is the screen people glance at before sleeping.
   const scheduleNote =
     wake && schedule === 'error'
-      ? 'This alarm could not be set on this phone. Open it from Tonight to try again.'
+      ? 'This alarm could not be set on this phone. Open it from Wake to try again.'
       : wake && schedule !== 'scheduled'
         ? 'Not confirmed on this phone yet.'
         : null;
@@ -92,7 +92,7 @@ export default function WelcomeRoute() {
     : pending
       ? `Your invitation to ${first(pending.name)} is still waiting. Nobody is notified yet.`
       : wake && someoneAccepted
-        ? `Nobody is notified if you sleep through this alarm yet. You can add ${first(someoneAccepted.name)} to it from Tonight.`
+        ? `Nobody is notified if you sleep through this alarm yet. You can add ${first(someoneAccepted.name)} to it from Wake.`
         : 'Nobody is notified if you sleep through yet.';
 
   return (
@@ -148,7 +148,7 @@ export default function WelcomeRoute() {
           its amber is a warm, mid-luminance colour rather than white, so it is findable
           half-asleep without being the brightest thing in the room.
         */}
-        <PrimaryButton label="Open tonight" onPress={() => router.replace('/tonight' as never)} />
+        <PrimaryButton label="Open ZO-ZAR" onPress={() => router.replace('/home' as never)} />
       </ScrollView>
     </SafeAreaView>
   );

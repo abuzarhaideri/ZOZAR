@@ -497,8 +497,8 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
     <View style={styles.brandBar}>
       <Touchable
         accessibilityRole="button"
-        accessibilityLabel="Go to tonight"
-        onPress={() => router.replace('/tonight' as never)}
+        accessibilityLabel="Go to Wake"
+        onPress={() => router.replace('/home' as never)}
         rippleColor={theme.surfaceStrong}
         borderless
         style={styles.brandRow}

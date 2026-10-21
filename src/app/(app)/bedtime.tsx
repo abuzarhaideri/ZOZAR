@@ -22,7 +22,7 @@ import {
  * Bedtime.
  *
  * A deliberately low-information screen: the next wake-up, how long until it, and one
- * way to change it. Everything else has already been decided on Tonight. It is one of
+ * way to change it. Everything else has already been decided on Wake. It is one of
  * the two places the ambient night sky is allowed, because nothing here asks for a
  * decision.
  *
@@ -55,7 +55,7 @@ export default function BedtimeRoute() {
     };
   }, []);
 
-  // Same choice as Tonight: the soonest active plan.
+  // Same choice as Wake: the soonest active plan.
   const wake = useMemo(() => {
     const active = wakePlans.filter((plan) => plan.status === 'Active' && !plan.isEmpty);
     return (

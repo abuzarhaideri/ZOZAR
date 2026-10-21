@@ -43,7 +43,7 @@ function deviceStatusLabel(plan: WakePlan, status?: { status: 'scheduled' | 'not
  * The alarm list and its editor.
  *
  * Optional route param `edit`: `/wake?edit=<planId>` opens that alarm's editor directly
- * (so Tonight's dial can go straight to the alarm it shows), and `/wake?edit=new` opens a
+ * (so the Wake dial can go straight to the alarm it shows), and `/wake?edit=new` opens a
  * new one when there is room. Without the param the screen behaves as a plain list.
  */
 export default function WakeRoute() {
@@ -237,8 +237,8 @@ export default function WakeRoute() {
 
   return (
     <Screen>
-      {/* Reached from Tonight, not a tab, so it carries its own way back. */}
-      <BackButton label="Tonight" />
+      {/* Reached from Wake, not a tab, so it carries its own way back. */}
+      <BackButton label="Wake" />
 
       <View style={wake.intro}>
         <Text accessibilityRole="header" style={wake.title}>

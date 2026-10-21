@@ -174,7 +174,7 @@ export default function WakeConfirmationRoute() {
             {isPractice ? (
               <SecondaryButton label="Back to alarms" onPress={() => router.replace('/wake' as never)} />
             ) : (
-              <SecondaryButton label="Back to Tonight" onPress={() => router.replace('/tonight' as never)} />
+              <SecondaryButton label="Back to Wake" onPress={() => router.replace('/home' as never)} />
             )}
           </View>
         </View>
