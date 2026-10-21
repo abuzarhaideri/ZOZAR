@@ -48,8 +48,9 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      # Same order as CI: prove the migrations on the empty container, then test.
       - run: npm run db:migrate
+      - run: npm test
 
   deploy:
     name: Deploy to AWS

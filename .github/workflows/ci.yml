@@ -56,9 +56,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Unit tests
-        run: npm test
-
+      # Migrations run first, against the service container while it is genuinely empty.
+      # That is what proves they are valid; running them after the tests would only prove
+      # they are a no-op on a schema the tests' own setup had already created.
       - name: Migrations apply to an empty database
         run: npm run db:migrate
 
@@ -66,6 +66,9 @@ jobs:
         # Re-running must be a no-op. If this fails, a migration is not safe to retry
         # after a partial deploy.
         run: npm run db:migrate
+
+      - name: Unit tests
+        run: npm test
 
   infra:
     name: Infrastructure synth

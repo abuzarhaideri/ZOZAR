@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    // Creates the schema before any file runs. See test/global-setup.ts.
+    globalSetup: ['./test/global-setup.ts'],
     // scrypt at a real work factor takes ~100ms per hash, so password tests need more
     // than the 5s default once a few hashes run in one case.
     testTimeout: 20_000,
