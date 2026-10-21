@@ -73,8 +73,16 @@ aws iam create-open-id-connect-provider \
 ```
 
 Then the role. The trust policy is the security boundary here — `sub` must pin the
-repository **and** the ref, or any workflow in any repository that can reach this provider
-could assume the role:
+repository **and** the exact context, or any workflow in any repository that can reach
+this provider could assume the role.
+
+The deploy job declares `environment: production`, and that changes the claim. When a job
+references an environment, GitHub issues `sub` as
+`repo:<OWNER>/<REPO>:environment:<NAME>`; the `ref:refs/heads/...` form is only used by
+jobs with no environment. Pinning the ref form here would be rejected at
+`AssumeRoleWithWebIdentity` and the first deploy would fail. Pinning the environment is
+also the stronger choice, because an environment can carry required reviewers and a
+branch policy, which a bare ref cannot:
 
 ```json
 {
@@ -86,7 +94,7 @@ could assume the role:
     "Condition": {
       "StringEquals": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:<OWNER>/<REPO>:ref:refs/heads/main"
+        "token.actions.githubusercontent.com:sub": "repo:<OWNER>/<REPO>:environment:production"
       }
     }
   }]
@@ -95,6 +103,8 @@ could assume the role:
 
 Use `StringEquals` on `sub`, not `StringLike` with a wildcard. `repo:<OWNER>/<REPO>:*`
 would let a pull-request workflow from a fork assume the deployment role.
+
+`scripts/aws-bootstrap.sh` performs every step in sections 2 and 3 and is safe to re-run.
 
 For permissions, attach the CDK bootstrap roles rather than `AdministratorAccess`:
 
@@ -123,9 +133,11 @@ npx cdk bootstrap aws://<ACCOUNT_ID>/ap-south-1
 | `DATABASE_URL` | migration step | Migrations run from the runner, before the new Lambda code is live, so the runner needs the database directly. |
 | `DATABASE_CA_CERT` | migration step | Same reason; TLS verification applies to the runner too. |
 
-Also create a `production` environment in the repository settings. Adding a required
-reviewer there turns every deploy into an approval gate, which is worth having once this
-is serving anyone other than you.
+You must also create the `production` environment in the repository settings — the deploy
+job references it, and the trust policy above pins it. Adding a required reviewer there
+turns every deploy into an approval gate, which is worth having once this is serving
+anyone other than you. Restrict it to the `main` branch so the environment claim cannot
+be obtained from a side branch.
 
 ## 5. Deploying
 
