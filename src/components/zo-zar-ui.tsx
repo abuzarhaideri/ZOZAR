@@ -218,18 +218,135 @@ export function PrimaryButton({
       accessibilityState={{ disabled: disabled || busy, busy }}
       disabled={disabled || busy}
       onPress={onPress}
-      rippleColor={theme.accentContrast}
+      rippleColor={theme.onFill}
       style={[styles.primaryButton, (disabled || busy) && styles.disabled]}
     >
       {busy ? (
-        <ActivityIndicator color={theme.accentContrast} />
+        <ActivityIndicator color={theme.onFill} />
       ) : (
         <>
-          {icon ? <Icon as={icon} size={IconSize.md} color={theme.accentContrast} /> : null}
+          {icon ? <Icon as={icon} size={IconSize.md} color={theme.onFill} /> : null}
           <Text style={styles.primaryText}>{label}</Text>
         </>
       )}
     </Touchable>
+  );
+}
+
+export function SecondaryButton({
+  label,
+  onPress,
+  icon,
+  disabled = false,
+  accessibilityHint,
+}: {
+  label: string;
+  onPress?: () => void;
+  icon?: LucideIcon;
+  disabled?: boolean;
+  accessibilityHint?: string;
+}) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <Touchable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      rippleColor={theme.surfaceStrong}
+      style={[styles.secondaryButton, disabled && styles.disabled]}
+    >
+      {icon ? <Icon as={icon} size={IconSize.md} color={theme.text} /> : null}
+      <Text style={styles.secondaryText}>{label}</Text>
+    </Touchable>
+  );
+}
+
+/**
+ * Hearth's list row: a leading mark, a title with one line of detail, and a chevron when
+ * it opens something.
+ *
+ * Rows rather than cards, separated by a hairline. A chevron appears only when the row
+ * navigates; a row that toggles in place gets none, because a chevron promises a new
+ * screen and breaking that promise is how people stop trusting what they tap.
+ */
+export function HearthRow({
+  title,
+  detail,
+  leading,
+  trailing,
+  onPress,
+  onLongPress,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityRole = 'button',
+  accessibilityState,
+  navigates = true,
+  last = false,
+  dimmed = false,
+}: {
+  title: string;
+  detail?: string;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  accessibilityRole?: 'button' | 'checkbox' | 'link';
+  accessibilityState?: { checked?: boolean; disabled?: boolean; busy?: boolean };
+  /** Shows the chevron. False for rows that act in place. */
+  navigates?: boolean;
+  last?: boolean;
+  /** For a completed item: the text recedes but stays, so it can be undone. */
+  dimmed?: boolean;
+}) {
+  const { theme, styles } = useZOZARTheme();
+  const body = (
+    <View style={[styles.hearthRow, last && styles.hearthRowLast]}>
+      {leading ? <View style={styles.hearthLeading}>{leading}</View> : null}
+      <View style={styles.hearthCopy}>
+        <Text style={[styles.hearthTitle, dimmed && styles.hearthDimmed]} numberOfLines={2}>
+          {title}
+        </Text>
+        {detail ? (
+          <Text style={styles.hearthDetail} numberOfLines={2}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      {trailing ?? (navigates && onPress ? <Icon as={ChevronRight} size={IconSize.md} color={theme.subtle} /> : null)}
+    </View>
+  );
+  if (!onPress && !onLongPress) return body;
+  return (
+    <Touchable
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel ?? (detail ? `${title}, ${detail}` : title)}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={accessibilityState}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      rippleColor={theme.surfaceStrong}
+    >
+      {body}
+    </Touchable>
+  );
+}
+
+/** A leading mark for a HearthRow: an icon in a soft circle, or a person's initial. */
+export function RowMark({ icon, letter, active = false }: { icon?: LucideIcon; letter?: string; active?: boolean }) {
+  const { theme, styles } = useZOZARTheme();
+  return (
+    <View style={[styles.rowMark, active && { backgroundColor: theme.backgroundSelected }]}>
+      {icon ? (
+        <Icon as={icon} size={IconSize.md} color={active ? theme.accent : theme.textSecondary} />
+      ) : (
+        <Text style={[styles.rowMarkLetter, active && { color: theme.accent }]}>{letter}</Text>
+      )}
+    </View>
   );
 }
 
@@ -579,9 +696,9 @@ function makeUIStyles(theme: Theme) {
     sectionAction: { ...Type.callout, color: theme.accent },
     sectionActionTarget: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Spacing.sm },
 
+    // Hearth cards are a raised surface and nothing else: no border, no shadow. The
+    // limestone/olive step between background and surface is the whole edge.
     card: {
-      borderWidth: hairline,
-      borderColor: theme.line,
       borderRadius: Radius.card,
       backgroundColor: theme.surface,
       padding: Spacing.xl,
@@ -590,24 +707,26 @@ function makeUIStyles(theme: Theme) {
     cardTitle: { ...Type.heading, color: theme.text },
     cardDetail: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm },
 
+    // Gold with dark ink in both appearances, per the brief. One per decision.
     primaryButton: {
       minHeight: 52,
-      borderRadius: Radius.row,
+      borderRadius: Radius.button,
       paddingHorizontal: Spacing.xl,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Spacing.sm,
-      backgroundColor: theme.accent,
+      backgroundColor: theme.fill,
       overflow: 'hidden',
     },
-    primaryText: { ...Type.action, color: theme.accentContrast },
-    primaryGlyph: { color: theme.accentContrast, fontSize: 18 },
+    primaryText: { ...Type.action, color: theme.onFill },
+    primaryGlyph: { color: theme.onFill, fontSize: 18 },
+    // Hearth's secondary: the raised surface, no outline. Clearly a button, clearly not
+    // the one you are meant to press first.
     secondaryButton: {
       minHeight: 52,
-      borderRadius: Radius.row,
-      borderWidth: hairline,
-      borderColor: theme.lineStrong,
+      borderRadius: Radius.button,
+      backgroundColor: theme.surface,
       paddingHorizontal: Spacing.lg,
       flexDirection: 'row',
       alignItems: 'center',
@@ -619,6 +738,31 @@ function makeUIStyles(theme: Theme) {
     secondaryGlyph: { color: theme.text, fontSize: 18 },
     pressed: { opacity: 0.72 },
     disabled: { opacity: 0.4 },
+
+    hearthRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      minHeight: 64,
+      paddingVertical: Spacing.md,
+      borderBottomWidth: hairline,
+      borderBottomColor: theme.line,
+    },
+    hearthRowLast: { borderBottomWidth: 0 },
+    hearthLeading: { alignItems: 'center', justifyContent: 'center' },
+    hearthCopy: { flex: 1, minWidth: 0 },
+    hearthTitle: { ...Type.callout, fontSize: 16, color: theme.text },
+    hearthDimmed: { color: theme.subtle, textDecorationLine: 'line-through' },
+    hearthDetail: { ...Type.caption, color: theme.textSecondary, marginTop: 3 },
+    rowMark: {
+      width: 40,
+      height: 40,
+      borderRadius: 999,
+      backgroundColor: theme.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowMarkLetter: { ...Type.callout, fontFamily: Fonts.semibold, color: theme.text },
 
     field: { gap: Spacing.sm, marginBottom: Spacing.lg },
     fieldLabel: { ...Type.label, color: theme.textSecondary },

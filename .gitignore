@@ -65,3 +65,6 @@ infra/node_modules/
 # artwork, it never ships in the app, and it must not enter this repo history.
 design/
 .playwright-mcp/
+
+# The user's design review bundle: reference only, not shipped.
+design-exports/

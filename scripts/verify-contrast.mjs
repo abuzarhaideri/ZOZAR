@@ -82,6 +82,11 @@ const PAIRS = [
   ['warm', 'surface', 'large', 'eyebrow on a card'],
   ['text', 'backgroundSelected', 'small', 'label on a selected row'],
   ['lineStrong', 'background', 'large', 'input border against the background'],
+  ['onFill', 'fill', 'small', 'label on the gold primary button'],
+  ['textSecondary', 'surfaceStrong', 'small', 'supporting copy on a pressed row'],
+  ['accent', 'backgroundSelected', 'small', 'selected label on a selected row'],
+  ['subtle', 'surfaceStrong', 'small', 'timestamps on a raised row'],
+  ['lineStrong', 'surface', 'large', 'control border on a card'],
 ];
 
 const THRESHOLD = { small: 4.5, large: 3 };

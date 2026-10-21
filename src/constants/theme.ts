@@ -1,128 +1,107 @@
 import { Platform, type TextStyle } from 'react-native';
 
 /**
- * ZO-ZAR's semantic palette. Components consume roles, never raw mode colors.
+ * ZO-ZAR's semantic palette — Hearth.
  *
- * The palette is night-first: the dark set is the reference design and the light set is
- * derived from it. An alarm app is used in bed, in the dark, and at 06:00 — a
- * full-brightness white screen is the wrong default for every one of those moments.
- * Night-first describes which mode was designed first, not which mode is forced; the
- * user's System, Light or Dark choice is always honoured, and the light set is held to
- * the same contrast bar.
+ * Hearth's thesis is that an alarm should feel like a familiar object beside the bed. The
+ * night mode is a dark olive-charcoal and the day mode a warm limestone, so the two read
+ * as the same object under lamplight and under daylight rather than as two products.
  *
- * Dark mode uses two background levels, `background` (base) and `surface` (elevated),
- * which is how iOS conveys depth when one dark surface sits above another
- * (`dark-mode.md › Mobile`). Pure black is avoided: it makes OLED smearing obvious when
- * scrolling and removes any room to show elevation.
+ * Values are taken verbatim from the Hearth row of the design brief
+ * (design-exports/ZO-ZAR-design-review/Design-brief-and-Claude-prompt.md). Where the
+ * brief is silent — hairlines, error states, selected rows — values are derived on the
+ * same olive axis and verified rather than invented on a different one.
  *
- * Text is a warm off-white rather than #FFFFFF. Pure white on near-black glows and
- * halates, which `dark-mode.md › Dark Mode colors` warns about from the opposite
- * direction ("soften the color of white backgrounds").
+ * Amber is reserved for selected and primary actions. It is not decoration, and it is
+ * not a status colour; if something is amber, it is something you can press or something
+ * that is currently chosen.
  *
- * Every foreground/background pair here is verified against the contrast table in
- * `accessibility.md › Color and effects` — 4.5:1 for text up to 17pt, 3:1 at 18pt or
- * bold. Run `npm run verify:contrast` after changing any value.
+ * `fill` / `onFill` are the primary button. They are deliberately the same in both
+ * appearances — a gold button with dark ink — because the brief specifies it that way and
+ * because a primary action that changes colour between day and night is harder to find
+ * half-asleep. `accent` is amber used as *text*, which does change: #E7BB72 is unreadable
+ * on limestone, so light mode deepens it to #82500C.
+ *
+ * Every foreground/background pair is checked by `npm run verify:contrast`.
  */
 export const Colors = {
   dark: {
-    // Base and elevated. Warm brown-black rather than blue-black ink.
-    //
-    // Daylight's screen is amber paper lit by its own warm frontlight; nothing in that
-    // world is cool-toned. Shifting the base from #0D1117 (blue-black) to #100E0A moves
-    // every surface onto the same warm axis as the accent, so amber now reads as *more*
-    // of the room's light rather than as a colour laid on top of a cold one.
-    background: '#100E0A',
-    surface: '#1A1711',
-    surfaceStrong: '#26221A',
-    backgroundElement: '#1A1711',
-    backgroundSelected: '#2E2415',
+    background: '#1C1C19',
+    surface: '#292923',
+    surfaceStrong: '#34342D',
+    backgroundElement: '#292923',
+    backgroundSelected: '#3A3324',
 
-    // Warm off-white; secondary and subtle both clear 4.5:1 on base and elevated.
-    text: '#F4EFE4',
-    textSecondary: '#BCB2A2',
-    muted: '#BCB2A2',
-    subtle: '#9B9183',
+    text: '#F3EDDF',
+    textSecondary: '#B7B2A4',
+    muted: '#B7B2A4',
+    subtle: '#A29D90',
 
-    line: '#2B261D',
-    // `line` is decorative — dividers and hairlines, carrying no information on its own.
-    // `lineStrong` outlines inputs and other controls, so it is what identifies them as
-    // interactive and has to clear 3:1 against the background it sits on.
-    lineStrong: '#6E6657',
+    // `line` is decorative. `lineStrong` outlines controls and must clear 3:1.
+    line: '#424239',
+    lineStrong: '#77736A',
 
-    // Sunrise amber, unchanged: it was already Daylight's hue, and the surfaces moved to
-    // meet it rather than the other way round. Light enough that it needs dark ink on
-    // top, which is why accentContrast is near-black rather than white.
-    accent: '#F2A94B',
-    accentContrast: '#1A1206',
+    accent: '#E7BB72',
+    accentContrast: '#292319',
+    fill: '#E7BB72',
+    onFill: '#292319',
 
-    // An inverted card on a dark theme is *light*. The previous design hardcoded white
-    // text on these surfaces, which would now be white on near-white, so the inverse set
-    // carries its own secondary and line colours rather than leaving screens to guess.
-    inverseSurface: '#F4EFE4',
-    inverseText: '#19150F',
-    inverseTextSecondary: '#4E4739',
-    inverseLine: '#D8CFBE',
+    inverseSurface: '#F3EDDF',
+    inverseText: '#282820',
+    inverseTextSecondary: '#5C5849',
+    inverseLine: '#D3CCBC',
 
-    success: '#86CE94',
-    successSurface: '#152318',
-    warning: '#E8B866',
-    warningSurface: '#2C2314',
-    error: '#F0908A',
-    errorSurface: '#2E1C18',
+    success: '#9CCB94',
+    successSurface: '#25301F',
+    warning: '#E7BB72',
+    warningSurface: '#332C1D',
+    error: '#EE9A86',
+    errorSurface: '#36231D',
 
-    // `warm` is the quiet companion to the accent for eyebrows and kickers, not a second
-    // action color. AGENTS.md permits exactly one accent hue.
-    warm: '#E0B07C',
-    warmSurface: '#241B12',
+    warm: '#E7BB72',
+    warmSurface: '#332C1D',
 
-    focus: '#F2A94B',
-    scrim: 'rgba(8, 6, 3, 0.74)',
+    focus: '#E7BB72',
+    scrim: 'rgba(12, 12, 10, 0.72)',
   },
 
   light: {
-    // Warm paper, not white.
-    //
-    // Daylight's whole premise is a screen you can read in sunlight because it behaves
-    // like paper. #F5F0E4 is that paper. The previous #FAF8F5 was a cooled-down white,
-    // which is the one thing a sunlight-first reference is arguing against.
-    background: '#F5F0E4',
-    surface: '#FCF8EE',
-    surfaceStrong: '#EBE3D2',
-    backgroundElement: '#FCF8EE',
-    backgroundSelected: '#F7E7C8',
+    background: '#F6F0E4',
+    surface: '#EAE2D4',
+    surfaceStrong: '#E6DDCC',
+    backgroundElement: '#EAE2D4',
+    backgroundSelected: '#F1DDB3',
 
-    text: '#1C1710',
-    textSecondary: '#5C5343',
-    muted: '#5C5343',
-    subtle: '#6A6050',
+    text: '#282820',
+    textSecondary: '#666253',
+    muted: '#666253',
+    subtle: '#615D4F',
 
-    line: '#E0D7C4',
-    // See the dark-mode note: this outlines controls, so it clears 3:1 rather than being
-    // the near-invisible hairline it was.
-    lineStrong: '#8C8372',
+    line: '#D3CCBC',
+    lineStrong: '#7C7768',
 
-    // Deepened amber: the dark-mode value does not reach 4.5:1 against a light
-    // background, so light mode uses a darker tone of the same hue.
-    accent: '#8A4E08',
-    accentContrast: '#FFFBF2',
+    accent: '#82500C',
+    accentContrast: '#FFF8EC',
+    fill: '#E7BB72',
+    onFill: '#292319',
 
-    inverseSurface: '#1C1710',
-    inverseText: '#F7F2E7',
-    inverseTextSecondary: '#B5AC9B',
-    inverseLine: '#39322A',
+    inverseSurface: '#282820',
+    inverseText: '#F3EDDF',
+    inverseTextSecondary: '#B7B2A4',
+    inverseLine: '#424239',
 
-    success: '#1B6440',
-    successSurface: '#E3EEE2',
-    warning: '#744D0F',
-    warningSurface: '#F8EAD0',
-    error: '#9E2E26',
-    errorSurface: '#F8E4DE',
+    success: '#2D5E2A',
+    successSurface: '#DFE6CF',
+    warning: '#7A4D0D',
+    warningSurface: '#F1E2C3',
+    error: '#9A3524',
+    errorSurface: '#F3DDD3',
 
-    warm: '#82521C',
-    warmSurface: '#F3E8D6',
+    warm: '#82500C',
+    warmSurface: '#F1E2C3',
 
-    focus: '#8A4E08',
-    scrim: 'rgba(28, 23, 16, 0.46)',
+    focus: '#82500C',
+    scrim: 'rgba(40, 40, 32, 0.46)',
   },
 } as const;
 
@@ -147,7 +126,8 @@ export const Fonts = {
  */
 export const Type = {
   display: { fontFamily: Fonts.bold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2 },
-  title: { fontFamily: Fonts.bold, fontSize: 28, lineHeight: 34, letterSpacing: -0.6 },
+  /** Hearth's page heading: large, semibold, tight. "A softer start." */
+  title: { fontFamily: Fonts.semibold, fontSize: 30, lineHeight: 34, letterSpacing: -1.1 },
   heading: { fontFamily: Fonts.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   body: { fontFamily: Fonts.regular, fontSize: 16, lineHeight: 24 },
   callout: { fontFamily: Fonts.medium, fontSize: 15, lineHeight: 22 },
@@ -232,8 +212,10 @@ export const Radius = {
   tight: 8,
   /** Rows and inputs: present, but barely. */
   row: 12,
-  /** Cards: a discrete object with its own actions. */
-  card: 20,
+  /** Cards: a discrete object with its own actions. Hearth's note card is 22. */
+  card: 22,
+  /** Hearth's buttons: soft, but still recognisably a button rather than a pill. */
+  button: 16,
   /** Sheets and modals: something that arrived over the top of the screen. */
   sheet: 28,
   pill: 999,
@@ -266,6 +248,8 @@ export const Motion = {
   instant: 90,
   fast: 160,
   base: 220,
+  /** Opening a detail, per the Hearth brief: 180ms opacity and translation. */
+  detail: 180,
   slow: 320,
   /** Cubic-bezier control points, consumed by Reanimated's `Easing.bezier`. */
   easing: {

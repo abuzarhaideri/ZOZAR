@@ -53,6 +53,9 @@ export default function AppLayout() {
         tabBarItemStyle: { minHeight: 58 },
         tabBarLabelStyle: { fontFamily: Fonts.medium, fontSize: 12, marginTop: -2 },
         tabBarHideOnKeyboard: true,
+        // Hearth opens details with a short cross-fade rather than a slide: calm, and
+        // nothing for Reduce Motion to remove because nothing travels.
+        animation: 'fade',
       }}
     >
       <Tabs.Screen
@@ -72,9 +75,11 @@ export default function AppLayout() {
         }}
       />
 
-      {/* Reached from the spine, never from a tab. */}
+      {/* Reached by touching something on Tonight, never from a tab. */}
       <Tabs.Screen name="wake" options={{ href: null }} />
       <Tabs.Screen name="plan" options={{ href: null }} />
+      {/* Bedtime is a low-information view: no tab bar, nothing to do but put the phone down. */}
+      <Tabs.Screen name="bedtime" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="wake/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
     </Tabs>
