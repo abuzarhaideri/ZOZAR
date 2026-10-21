@@ -17,6 +17,19 @@ export type RepositoryMode = 'REST' | 'LOCAL_FALLBACK';
 export type UiDifficulty = 'Easy' | 'Medium' | 'Hard';
 export type RepositorySession = { userId: string; email?: string; displayName?: string; profilePhotoUri?: string };
 export type RepositoryAuthResult = { session: RepositorySession | null; requiresEmailConfirmation: boolean };
+/**
+ * The label a plan carries when nobody will be told, and the only way to test for it.
+ *
+ * Screens used to compare `protectedBy` against this literal string. Rewording the
+ * label would then have made the ringing screen claim someone would be told when nobody
+ * would — a false protection claim on the one screen that must never make one.
+ */
+export const UNPROTECTED_LABEL = 'No trusted person yet';
+
+export function isProtected(plan: { protectedBy: string }): boolean {
+  return plan.protectedBy !== UNPROTECTED_LABEL;
+}
+
 export type RepositoryCommitment = { id: string; title: string; detail: string; dateLabel: string; time: string; startsAt: string; done: boolean };
 
 export type RepositoryWakePlan = {
@@ -223,7 +236,7 @@ function mapWakePlan(row: Record<string, any>, occurrence?: RepositoryWakeOccurr
     soundKey: row.soundKey ?? row.sound_key ?? 'zo-zar',
     status: (row.isActive ?? row.is_active) ? 'Active' : 'Paused',
     graceMinutes: row.graceMinutes ?? row.grace_period_minutes,
-    protectedBy: (row.connectionId ?? row.circle_id) ? 'Your trusted person' : 'No trusted person yet',
+    protectedBy: (row.connectionId ?? row.circle_id) ? 'Your trusted person' : UNPROTECTED_LABEL,
     commitmentId: row.commitmentId ?? row.commitment_id ?? null,
     circleId: row.connectionId ?? row.circle_id ?? null,
     scheduleType,
@@ -249,7 +262,7 @@ function localPlanFromInput(input: RepositoryWakePlanInput, id: string): Reposit
     soundKey: input.soundKey ?? 'zo-zar',
     status: input.active ? 'Active' : 'Paused',
     graceMinutes: input.graceMinutes ?? 10,
-    protectedBy: input.circleId ? 'Your trusted circle' : 'No trusted person yet',
+    protectedBy: input.circleId ? 'Your trusted circle' : UNPROTECTED_LABEL,
     commitmentId: input.commitmentId ?? null,
     circleId: input.circleId ?? null,
     scheduleType: input.scheduleType,
@@ -300,7 +313,7 @@ function localRepository(): ZOZARRepository {
       ...(input.soundKey === undefined ? {} : { soundKey: input.soundKey }),
       ...(input.active === undefined ? {} : { status: input.active ? 'Active' as const : 'Paused' as const }),
       ...(input.commitmentId === undefined ? {} : { commitmentId: input.commitmentId }),
-      ...(input.circleId === undefined ? {} : { circleId: input.circleId, protectedBy: input.circleId ? 'Your trusted circle' : 'No trusted person yet' }),
+      ...(input.circleId === undefined ? {} : { circleId: input.circleId, protectedBy: input.circleId ? 'Your trusted circle' : UNPROTECTED_LABEL }),
       ...(input.scheduleType === undefined ? {} : { scheduleType: input.scheduleType, repeatLabel: input.scheduleType === 'once' ? 'One time' : input.scheduleType === 'daily' ? 'Every day' : 'Selected weekdays' }),
       ...(input.scheduledDate === undefined ? {} : { scheduledDate: input.scheduledDate }),
       ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
@@ -362,11 +375,11 @@ function localRepository(): ZOZARRepository {
     confirmWake: async (occurrenceId) => { if (!wakeOccurrences.some((item) => item.id === occurrenceId)) throw new Error('No active wake occurrence is available to confirm.'); wakeOccurrences = wakeOccurrences.map((item) => item.id === occurrenceId ? { ...item, status: 'confirmed' } : item); },
     recordWakeSnooze: async () => undefined,
     listCircleMembers: async () => members,
-    inviteCircleMember: async (email) => { const name = email.split('@')[0]; members = [...members, { id: `local-member-${Date.now()}`, name, initials: initials(name), detail: 'Circle invite · Pending', status: 'Pending', relationship: 'outgoing' }]; },
+    inviteCircleMember: async (email) => { const name = email.split('@')[0]; members = [...members, { id: `local-member-${Date.now()}`, name, initials: initials(name), detail: 'Invited, waiting for them', status: 'Pending', relationship: 'outgoing' }]; },
     respondToCircleInvitation: async (id, accept) => {
       if (!members.some((member) => member.id === id)) throw new Error('Invitation was not found.');
       members = accept
-        ? members.map((member) => member.id === id ? { ...member, status: 'Accepted', detail: 'Wake support · Accepted' } : member)
+        ? members.map((member) => member.id === id ? { ...member, status: 'Accepted', detail: 'Accepted' } : member)
         : members.filter((member) => member.id !== id);
     },
     removeCircleMember: async (id) => { members = members.filter((member) => member.id !== id); },

@@ -4,33 +4,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AlarmDatePicker, AlarmTimePicker, formatAlarmTime } from '@/components/alarm-time-picker';
 import { Touchable } from '@/components/motion';
-import { Spine, Stop, minutesOf } from '@/components/night-spine';
 import { useZOZARStore, type Commitment } from '@/components/zo-zar-store';
 import {
   BackButton,
-  Icon,
+  HearthRow,
   Icons,
+  PrimaryButton,
+  RowMark,
   Screen,
+  SecondaryButton,
   TextField,
   useZOZARTheme,
 } from '@/components/zo-zar-ui';
-import { IconSize, Radius, Spacing, Type, type Theme } from '@/constants/theme';
+import { Radius, Spacing, Type, type Theme } from '@/constants/theme';
 
 /**
- * The days after tonight.
+ * The days after tonight, in the Hearth direction.
  *
- * Tonight draws one night. This draws the rest of them, as the same spine repeated under
- * day headings — Structured's week, so moving between "tonight" and "next Thursday" is a
- * change of range rather than a change of interface.
- *
- * The thing that actually needed fixing here was control density. Every row carried
- * three: a checkbox, a pencil and a bin. Three targets per item, two of which are
- * destructive or modal, is what makes a list feel like an admin panel.
- *
- * Now each row is one target. Tap marks it done, which is the thing you do constantly.
- * Long press opens the editor, which is the thing you do occasionally. Delete lives
- * inside that editor next to the fields it destroys, which is also the only place it can
- * be labelled with what is actually being lost.
+ * Each day is a heading over a short run of quiet rows. A row is one target: tap marks it
+ * done in place (it recedes but stays, so it can be undone), long press opens the editor.
+ * Delete lives inside that editor next to the fields it destroys, behind a confirmation
+ * that names what is lost. Nothing animates when a row changes; it simply updates.
  */
 
 function initialDate() {
@@ -92,9 +86,19 @@ export default function PlanRoute() {
       return result;
     }, {});
     return Object.values(groups)
-      .map((items) => items.slice().sort((a, b) => minutesOf(a.time) - minutesOf(b.time)))
+      // `time` is a display string; startsAt is the real instant, so order by that.
+      .map((items) => items.slice().sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()))
       .sort((a, b) => new Date(a[0]!.startsAt).getTime() - new Date(b[0]!.startsAt).getTime());
   }, [commitments]);
+
+  async function toggle(id: string) {
+    setError(null);
+    try {
+      await toggleCommitment(id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'That commitment could not be updated.');
+    }
+  }
 
   function openEditor(item?: Commitment) {
     setError(null);
@@ -105,6 +109,13 @@ export default function PlanRoute() {
     setDate(start);
     setTime(start);
     setEditorOpen(true);
+  }
+
+  /** Cancelling drops any validation error, so it does not reappear on the list behind. */
+  function closeEditor() {
+    setError(null);
+    setConfirmingDelete(false);
+    setEditorOpen(false);
   }
 
   async function save() {
@@ -146,12 +157,12 @@ export default function PlanRoute() {
 
   return (
     <Screen>
-      {/* Reached from the spine now, not a tab, so it carries its own way back. */}
+      {/* Reached from Tonight, not a tab, so it carries its own way back. */}
       <BackButton label="Tonight" />
 
       <View style={local.intro}>
         <Text accessibilityRole="header" style={local.title}>
-          The days ahead
+          The days ahead.
         </Text>
         <Text style={local.lede}>
           Things you need to be up for. Tap one to mark it done, hold it to change it.
@@ -164,7 +175,7 @@ export default function PlanRoute() {
           accessibilityLabel="Your plan could not be refreshed. Try again."
           accessibilityState={{ busy: isHydrating }}
           onPress={() => void retryHydration()}
-          rippleColor={theme.error}
+          rippleColor={theme.errorSurface}
           style={local.notice}
         >
           <Text style={local.noticeTitle}>Your plan could not be refreshed</Text>
@@ -181,58 +192,57 @@ export default function PlanRoute() {
       ) : null}
 
       {days.length === 0 ? (
-        <Text style={local.empty}>
-          Nothing planned yet. Add something you need to be up for and it will show against your
-          wake time.
-        </Text>
+        <View style={local.emptyBlock}>
+          <Text style={local.emptyTitle}>Nothing planned yet</Text>
+          <Text style={local.empty}>
+            Add something you need to be up for, like a class or an early shift, and it will sit
+            here under its day.
+          </Text>
+        </View>
       ) : (
         days.map((items) => (
           <View key={dateKey(items[0]!.startsAt)} style={local.day}>
             <Text accessibilityRole="header" style={local.dayHeading}>
               {dateHeading(items[0]!.startsAt)}
             </Text>
-            <Spine>
+            <View style={local.dayRows}>
               {items.map((item, index) => (
-                <Stop
+                <HearthRow
                   key={item.id}
-                  time={item.time}
                   title={item.title}
-                  tone={item.done ? 'done' : 'quiet'}
-                  first={index === 0}
+                  detail={item.done ? `${item.time}, done` : item.time}
+                  leading={<RowMark icon={item.done ? Icons.check : Icons.clock} />}
+                  navigates={false}
+                  dimmed={item.done}
                   last={index === items.length - 1}
-                  onPress={() => void toggleCommitment(item.id)}
+                  onPress={() => void toggle(item.id)}
                   onLongPress={() => openEditor(item)}
-                  accessibilityLabel={`${item.title} at ${item.time}${item.done ? ', done' : ''}`}
-                  accessibilityHint="Double tap to mark done. Long press to edit or delete."
-                  trailing={
-                    <View style={[local.ring, item.done && local.ringDone]} accessible={false}>
-                      {item.done ? <Icon as={Icons.check} size={12} color={theme.accentContrast} /> : null}
-                    </View>
-                  }
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: item.done }}
+                  accessibilityLabel={`${item.title} at ${item.time}`}
+                  accessibilityHint="Double tap to mark done or not done. Edit and delete are in the actions menu."
+                  actions={[{ name: 'edit', label: `Edit ${item.title}`, run: () => openEditor(item) }]}
                 />
               ))}
-            </Spine>
+            </View>
           </View>
         ))
       )}
 
-      {/* Adding is the last stop on the rail, matching Tonight. */}
-      <Spine>
-        <Stop
-          title="Add a commitment"
+      <View style={local.add}>
+        <SecondaryButton
+          label="Add a commitment"
           icon={Icons.plus}
-          first
-          last
           onPress={() => openEditor()}
           accessibilityHint="Opens the commitment editor"
         />
-      </Spine>
+      </View>
 
       <Modal
         visible={editorOpen}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => !busy && setEditorOpen(false)}
+        onRequestClose={() => !busy && closeEditor()}
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'bottom', 'left', 'right']}>
           <View style={local.modalHeader}>
@@ -240,26 +250,17 @@ export default function PlanRoute() {
               accessibilityRole="button"
               accessibilityLabel="Cancel"
               disabled={busy}
-              onPress={() => setEditorOpen(false)}
+              onPress={closeEditor}
               rippleColor={theme.surfaceStrong}
               style={local.headerAction}
             >
               <Text style={local.headerCancel}>Cancel</Text>
             </Touchable>
-            <Text style={local.modalTitle}>{editingId ? 'Edit' : 'New commitment'}</Text>
-            <Touchable
-              accessibilityRole="button"
-              accessibilityLabel={editingId ? 'Save changes' : 'Add it'}
-              accessibilityState={{ busy, disabled: !title.trim() }}
-              disabled={!title.trim() || busy}
-              onPress={() => void save()}
-              rippleColor={theme.surfaceStrong}
-              style={local.headerAction}
-            >
-              <Text style={[local.headerSave, !title.trim() && local.headerDisabled]}>
-                {busy ? 'Saving…' : 'Save'}
-              </Text>
-            </Touchable>
+            <Text accessibilityRole="header" style={local.modalTitle}>
+              {editingId ? 'Edit commitment' : 'New commitment'}
+            </Text>
+            {/* Balances Cancel so the title stays centred; the one save action is below. */}
+            <View style={local.headerAction} />
           </View>
 
           <ScrollView contentContainerStyle={local.editor} keyboardShouldPersistTaps="handled">
@@ -292,6 +293,14 @@ export default function PlanRoute() {
                 {error}
               </Text>
             ) : null}
+
+            {/* Disabled, not just quiet, while a delete is in flight so the two cannot race. */}
+            <PrimaryButton
+              label={editingId ? 'Save changes' : 'Save commitment'}
+              disabled={!title.trim() || busy}
+              busy={busy && !confirmingDelete}
+              onPress={() => void save()}
+            />
 
             {/*
               Delete lives here rather than on the row, beside the fields it destroys. It
@@ -351,33 +360,26 @@ const makeStyles = (theme: Theme) =>
     intro: { paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
     title: { ...Type.title, color: theme.text },
     lede: { ...Type.body, color: theme.textSecondary, marginTop: Spacing.sm, maxWidth: 440 },
-    empty: { ...Type.body, color: theme.subtle, paddingTop: Spacing.xl, maxWidth: 440 },
+    emptyBlock: { paddingTop: Spacing.xxl, gap: Spacing.sm },
+    emptyTitle: { ...Type.heading, color: theme.text },
+    empty: { ...Type.body, color: theme.textSecondary, maxWidth: 440 },
     error: { ...Type.caption, color: theme.error, marginTop: Spacing.md },
 
     notice: {
       borderWidth: 1,
       borderColor: theme.error,
       backgroundColor: theme.errorSurface,
-      borderRadius: Radius.card,
+      borderRadius: Radius.row,
       padding: Spacing.lg,
       marginTop: Spacing.lg,
     },
     noticeTitle: { ...Type.callout, color: theme.error },
     noticeDetail: { ...Type.caption, color: theme.textSecondary, marginTop: Spacing.xs },
 
-    day: { marginTop: Spacing.xl },
+    day: { marginTop: Spacing.xxl },
     dayHeading: { ...Type.heading, color: theme.text },
-
-    ring: {
-      width: 22,
-      height: 22,
-      borderRadius: Radius.pill,
-      borderWidth: 1.5,
-      borderColor: theme.lineStrong,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    ringDone: { backgroundColor: theme.accent, borderColor: theme.accent },
+    dayRows: { marginTop: Spacing.sm },
+    add: { marginTop: Spacing.xxl },
 
     modalHeader: {
       minHeight: 64,
@@ -391,8 +393,6 @@ const makeStyles = (theme: Theme) =>
     modalTitle: { ...Type.callout, color: theme.text },
     headerAction: { minWidth: 64, minHeight: 48, justifyContent: 'center' },
     headerCancel: { ...Type.action, color: theme.textSecondary },
-    headerSave: { ...Type.action, color: theme.accent, textAlign: 'right' },
-    headerDisabled: { color: theme.subtle },
 
     editor: {
       width: '100%',

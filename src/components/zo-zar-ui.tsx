@@ -286,6 +286,7 @@ export function HearthRow({
   navigates = true,
   last = false,
   dimmed = false,
+  actions,
 }: {
   title: string;
   detail?: string;
@@ -302,6 +303,14 @@ export function HearthRow({
   last?: boolean;
   /** For a completed item: the text recedes but stays, so it can be undone. */
   dimmed?: boolean;
+  /**
+   * Named actions for TalkBack's actions menu.
+   *
+   * Anything reachable by long press must be reachable another way: a double-tap-and-hold
+   * is the least discoverable gesture TalkBack has. Every long-press handler on a row
+   * should also appear here by name ("Edit", "Remove Priya").
+   */
+  actions?: { name: string; label: string; run: () => void }[];
 }) {
   const { theme, styles } = useZOZARTheme();
   const body = (
@@ -327,6 +336,8 @@ export function HearthRow({
       accessibilityLabel={accessibilityLabel ?? (detail ? `${title}, ${detail}` : title)}
       accessibilityHint={accessibilityHint}
       accessibilityState={accessibilityState}
+      accessibilityActions={actions?.map(({ name, label }) => ({ name, label }))}
+      onAccessibilityAction={(event) => actions?.find((action) => action.name === event.nativeEvent.actionName)?.run()}
       onPress={onPress}
       onLongPress={onLongPress}
       rippleColor={theme.surfaceStrong}

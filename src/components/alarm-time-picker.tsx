@@ -1,15 +1,19 @@
 import * as React from 'react';
 import DateTimePicker from '@expo/ui/community/datetime-picker';
-import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useZOZARTheme } from './zo-zar-ui';
+import { Touchable } from './motion';
+import { MinTarget, Radius, Spacing, Type, type Theme } from '@/constants/theme';
+import { clockParts, nowMinutes, usesTwelveHourClock } from '@/lib/time';
 
 function cloneDate(value: Date) {
   return new Date(value.getTime());
 }
 
+/** The time as this phone writes it: "7:00 AM" on a 12-hour device, "07:00" otherwise. */
 export function formatAlarmTime(value: Date) {
-  return value.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return clockParts(nowMinutes(value)).spoken;
 }
 
 function updateTime(value: Date, hour12: number, minute: number, period: 'AM' | 'PM') {
@@ -20,87 +24,268 @@ function updateTime(value: Date, hour12: number, minute: number, period: 'AM' | 
   return next;
 }
 
-export function AlarmTimePicker({ value, onChange }: { value: Date; onChange: (value: Date) => void }) {
+function longDay(value: Date) {
+  return value.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+/**
+ * Hearth's time field: the wake time set large on a soft surface, the way a bedside clock
+ * shows it. The whole surface is the target, and it opens Android's own time dialog, so the
+ * spinner, keyboard entry and TalkBack behaviour are the platform's rather than ours.
+ */
+export function AlarmTimePicker({
+  value,
+  onChange,
+  label = 'Wake-up time',
+}: {
+  value: Date;
+  onChange: (value: Date) => void;
+  label?: string;
+}) {
   const { theme } = useZOZARTheme();
+  const styles = React.useMemo(() => makeStyles(theme), [theme]);
   const [open, setOpen] = React.useState(false);
+  const parts = clockParts(nowMinutes(value));
   const hour = value.getHours() % 12 || 12;
   const minute = value.getMinutes();
   const period = value.getHours() >= 12 ? 'PM' : 'AM';
 
+  const face = (
+    <>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.clockLine}>
+        <Text style={styles.clock}>{parts.digits}</Text>
+        {parts.period ? <Text style={styles.period}>{parts.period}</Text> : null}
+      </View>
+    </>
+  );
+
   if (Platform.OS !== 'web') {
-    return <View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Choose wake time" onPress={() => setOpen(true)} style={{ borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 8, padding: 14, backgroundColor: theme.background }}>
-        <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700' }}>{formatAlarmTime(value)}</Text>
-        <Text style={{ color: theme.muted, fontSize: 12, marginTop: 4 }}>Open the native Android time picker</Text>
-      </Pressable>
-      {open && <DateTimePicker
-        value={value}
-        mode="time"
-        display="spinner"
-        presentation="dialog"
-        is24Hour={false}
-        accentColor={theme.accent}
-        positiveButton={{ label: 'Set time' }}
-        negativeButton={{ label: 'Cancel' }}
-        onValueChange={(_, next) => { onChange(next); setOpen(false); }}
-        onDismiss={() => setOpen(false)}
-      />}
-    </View>;
+    return (
+      <View>
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, ${parts.spoken}`}
+          accessibilityHint="Opens the time picker"
+          onPress={() => setOpen(true)}
+          rippleColor={theme.surfaceStrong}
+          style={styles.field}
+        >
+          {face}
+          <Text style={styles.hint}>Tap to change the time</Text>
+        </Touchable>
+        {open && (
+          <DateTimePicker
+            value={value}
+            mode="time"
+            display="spinner"
+            presentation="dialog"
+            is24Hour={!usesTwelveHourClock()}
+            accentColor={theme.accent}
+            positiveButton={{ label: 'Set time' }}
+            negativeButton={{ label: 'Cancel' }}
+            onValueChange={(_, next) => {
+              onChange(next);
+              setOpen(false);
+            }}
+            onDismiss={() => setOpen(false)}
+          />
+        )}
+      </View>
+    );
   }
 
-  return <View>
-    <View accessible accessibilityLabel={`Selected time ${formatAlarmTime(value)}`} style={{ borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 8, padding: 14, backgroundColor: theme.background }}>
-      <Text style={{ color: theme.text, fontSize: 22, fontWeight: '700' }}>{formatAlarmTime(value)}</Text>
-      <Text style={{ color: theme.muted, fontSize: 12, marginTop: 4 }}>Choose a time below</Text>
-    </View>
-    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-      <ScrollView style={{ height: 148, flex: 1 }} contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
-        {Array.from({ length: 12 }, (_, index) => index + 1).map((item) => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ checked: item === hour }} accessibilityLabel={`Hour ${item}`} onPress={() => onChange(updateTime(value, item, minute, period))} style={{ minHeight: 48, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: item === hour ? theme.accent : theme.surfaceStrong }}><Text style={{ color: item === hour ? theme.accentContrast : theme.text, textAlign: 'center', fontWeight: '700' }}>{item}</Text></Pressable>)}
-      </ScrollView>
-      <ScrollView style={{ height: 148, flex: 1 }} contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
-        {Array.from({ length: 60 }, (_, item) => item).map((item) => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ checked: item === minute }} accessibilityLabel={`Minute ${String(item).padStart(2, '0')}`} onPress={() => onChange(updateTime(value, hour, item, period))} style={{ minHeight: 48, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: item === minute ? theme.accent : theme.surfaceStrong }}><Text style={{ color: item === minute ? theme.accentContrast : theme.text, textAlign: 'center', fontWeight: '700' }}>{String(item).padStart(2, '0')}</Text></Pressable>)}
-      </ScrollView>
-      <View style={{ gap: 6, flex: 0.8 }}>
-        {(['AM', 'PM'] as const).map((item) => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ checked: item === period }} accessibilityLabel={item} onPress={() => onChange(updateTime(value, hour, minute, item))} style={{ minHeight: 48, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: item === period ? theme.accent : theme.surfaceStrong }}><Text style={{ color: item === period ? theme.accentContrast : theme.text, textAlign: 'center', fontWeight: '700' }}>{item}</Text></Pressable>)}
+  // Development fallback only: there is no web product, but the route still renders in a
+  // browser during local work, and the native dialog does not exist there.
+  return (
+    <View>
+      <View accessible accessibilityLabel={`${label}, ${parts.spoken}`} style={styles.field}>
+        {face}
+        <Text style={styles.hint}>Choose a time below</Text>
+      </View>
+      <View style={styles.columns}>
+        <ScrollView style={styles.column} contentContainerStyle={styles.columnContent}>
+          {Array.from({ length: 12 }, (_, index) => index + 1).map((item) => (
+            <Choice
+              key={item}
+              label={String(item)}
+              spoken={`Hour ${item}`}
+              selected={item === hour}
+              onPress={() => onChange(updateTime(value, item, minute, period))}
+              styles={styles}
+              theme={theme}
+            />
+          ))}
+        </ScrollView>
+        <ScrollView style={styles.column} contentContainerStyle={styles.columnContent}>
+          {Array.from({ length: 60 }, (_, item) => item).map((item) => (
+            <Choice
+              key={item}
+              label={String(item).padStart(2, '0')}
+              spoken={`Minute ${String(item).padStart(2, '0')}`}
+              selected={item === minute}
+              onPress={() => onChange(updateTime(value, hour, item, period))}
+              styles={styles}
+              theme={theme}
+            />
+          ))}
+        </ScrollView>
+        <View style={[styles.columnContent, styles.periodColumn]}>
+          {(['AM', 'PM'] as const).map((item) => (
+            <Choice
+              key={item}
+              label={item}
+              spoken={item}
+              selected={item === period}
+              onPress={() => onChange(updateTime(value, hour, minute, item))}
+              styles={styles}
+              theme={theme}
+            />
+          ))}
+        </View>
       </View>
     </View>
-  </View>;
+  );
 }
 
 export function AlarmDatePicker({ value, onChange }: { value: Date; onChange: (value: Date) => void }) {
   const { theme } = useZOZARTheme();
+  const styles = React.useMemo(() => makeStyles(theme), [theme]);
   const [open, setOpen] = React.useState(false);
   const minimumDate = new Date();
   minimumDate.setHours(0, 0, 0, 0);
 
   if (Platform.OS !== 'web') {
-    return <View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Choose wake date" onPress={() => setOpen(true)} style={{ borderWidth: 1, borderColor: theme.lineStrong, borderRadius: 8, padding: 14, backgroundColor: theme.background }}>
-        <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{value.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-        <Text style={{ color: theme.muted, fontSize: 12, marginTop: 4 }}>Open the native Android date picker</Text>
-      </Pressable>
-      {open && <DateTimePicker
-        value={value}
-        mode="date"
-        display="default"
-        presentation="dialog"
-        minimumDate={minimumDate}
-        accentColor={theme.accent}
-        positiveButton={{ label: 'Set date' }}
-        negativeButton={{ label: 'Cancel' }}
-        onValueChange={(_, next) => { onChange(next); setOpen(false); }}
-        onDismiss={() => setOpen(false)}
-      />}
-    </View>;
+    return (
+      <View>
+        <Touchable
+          accessibilityRole="button"
+          accessibilityLabel={`Date, ${longDay(value)}`}
+          accessibilityHint="Opens the date picker"
+          onPress={() => setOpen(true)}
+          rippleColor={theme.surfaceStrong}
+          style={styles.dateField}
+        >
+          <Text style={styles.fieldLabel}>Date</Text>
+          <Text style={styles.dateText}>{longDay(value)}</Text>
+          <Text style={styles.hint}>Tap to change the date</Text>
+        </Touchable>
+        {open && (
+          <DateTimePicker
+            value={value}
+            mode="date"
+            display="default"
+            presentation="dialog"
+            minimumDate={minimumDate}
+            accentColor={theme.accent}
+            positiveButton={{ label: 'Set date' }}
+            negativeButton={{ label: 'Cancel' }}
+            onValueChange={(_, next) => {
+              onChange(next);
+              setOpen(false);
+            }}
+            onDismiss={() => setOpen(false)}
+          />
+        )}
+      </View>
+    );
   }
 
-  return <ScrollView style={{ maxHeight: 188 }} contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
-    {Array.from({ length: 45 }, (_, index) => {
-      const next = cloneDate(minimumDate);
-      next.setDate(minimumDate.getDate() + index);
-      const selected = next.toDateString() === value.toDateString();
-      const label = next.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-      return <Pressable key={next.toISOString()} accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={label} onPress={() => onChange(next)} style={{ minHeight: 48, paddingHorizontal: 12, borderRadius: 8, justifyContent: 'center', backgroundColor: selected ? theme.accent : theme.surfaceStrong }}><Text style={{ color: selected ? theme.accentContrast : theme.text, fontWeight: '700' }}>{label}</Text></Pressable>;
-    })}
-  </ScrollView>;
+  return (
+    <ScrollView style={styles.dateList} contentContainerStyle={styles.columnContent}>
+      {Array.from({ length: 45 }, (_, index) => {
+        const next = cloneDate(minimumDate);
+        next.setDate(minimumDate.getDate() + index);
+        const label = next.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        return (
+          <Choice
+            key={next.toISOString()}
+            label={label}
+            spoken={label}
+            selected={next.toDateString() === value.toDateString()}
+            onPress={() => onChange(next)}
+            styles={styles}
+            theme={theme}
+            alignStart
+          />
+        );
+      })}
+    </ScrollView>
+  );
 }
+
+function Choice({
+  label,
+  spoken,
+  selected,
+  onPress,
+  styles,
+  theme,
+  alignStart = false,
+}: {
+  label: string;
+  spoken: string;
+  selected: boolean;
+  onPress: () => void;
+  styles: ReturnType<typeof makeStyles>;
+  theme: Theme;
+  alignStart?: boolean;
+}) {
+  return (
+    <Touchable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={spoken}
+      onPress={onPress}
+      rippleColor={theme.surfaceStrong}
+      style={[styles.choice, alignStart && styles.choiceStart, selected && styles.choiceSelected]}
+    >
+      <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text>
+    </Touchable>
+  );
+}
+
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    field: {
+      backgroundColor: theme.surface,
+      borderRadius: Radius.card,
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.xl,
+      overflow: 'hidden',
+    },
+    fieldLabel: { ...Type.label, color: theme.textSecondary },
+    clockLine: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm, marginTop: Spacing.sm },
+    clock: { ...Type.clock, color: theme.text },
+    period: { ...Type.heading, color: theme.textSecondary },
+    hint: { ...Type.caption, color: theme.subtle, marginTop: Spacing.sm },
+
+    dateField: {
+      backgroundColor: theme.surface,
+      borderRadius: Radius.card,
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.lg,
+      overflow: 'hidden',
+    },
+    dateText: { ...Type.body, fontSize: 18, lineHeight: 26, color: theme.text, marginTop: Spacing.xs },
+
+    columns: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
+    column: { height: 168, flex: 1 },
+    columnContent: { gap: Spacing.xs },
+    periodColumn: { flex: 0.8 },
+    dateList: { maxHeight: 212 },
+
+    choice: {
+      minHeight: MinTarget,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.row,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surface,
+      overflow: 'hidden',
+    },
+    choiceStart: { alignItems: 'flex-start' },
+    choiceSelected: { backgroundColor: theme.fill },
+    choiceText: { ...Type.action, color: theme.text, fontVariant: ['tabular-nums'] },
+    choiceTextSelected: { color: theme.onFill },
+  });

@@ -25,6 +25,7 @@ import type {
   UiDifficulty,
   ZOZARRepository,
 } from './zo-zar-repository';
+import { UNPROTECTED_LABEL } from './zo-zar-repository';
 
 /**
  * The ZO-ZAR API implementation of `ZOZARRepository`.
@@ -167,7 +168,7 @@ function mapWakePlan(row: ServerWakePlan, occurrence?: ServerOccurrence): Reposi
     soundKey: row.soundKey,
     status: row.isActive ? 'Active' : 'Paused',
     graceMinutes: row.graceMinutes,
-    protectedBy: row.connectionId ? 'Your trusted person' : 'No trusted person yet',
+    protectedBy: row.connectionId ? 'Your trusted person' : UNPROTECTED_LABEL,
     commitmentId: row.commitmentId,
     circleId: row.connectionId,
     scheduleType: row.scheduleType,
