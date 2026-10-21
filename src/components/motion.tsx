@@ -195,3 +195,12 @@ export function ProgressPulse({ color, height = 2 }: { color: string; height?: n
 export function announce(message: string): void {
   AccessibilityInfo.announceForAccessibility(message);
 }
+
+/**
+ * React Native Web colours a Switch's thumb in its "on" state from `activeThumbColor`, a
+ * web-only prop missing from React Native's types, and falls back to a teal that clashes
+ * with the palette. Spread this onto a Switch; on Android it is an empty object.
+ */
+export function webActiveThumb(colour: string): object {
+  return Platform.OS === 'web' ? { activeThumbColor: colour } : {};
+}
