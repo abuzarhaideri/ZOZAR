@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { Touchable } from '@/components/motion';
 import { Icon, Icons, PrimaryButton, Screen, TextField, useZOZARTheme } from '@/components/zo-zar-ui';
 import { useZOZARStore } from '@/components/zo-zar-store';
 import { Fonts, IconSize, Radius, Spacing, Type, type Theme } from '@/constants/theme';
+import { ZozarMark } from '@/components/zozar-mark';
 
 /** Sign-in pushes this screen, so going back is the natural way there; a cold start onto
  * sign-up has nothing to go back to and replaces instead. */
@@ -67,12 +68,7 @@ export default function SignUpScreen() {
   return (
     <Screen bottomInset>
       <View style={local.brandRow}>
-        <Image
-          source={require('../../../assets/images/zo-zar-mark-flat.png')}
-          style={local.brandLogo}
-          resizeMode="contain"
-          accessibilityIgnoresInvertColors
-        />
+        <ZozarMark height={22} decorative />
         <Text style={local.brand}>ZO-ZAR</Text>
       </View>
 
@@ -169,7 +165,6 @@ export default function SignUpScreen() {
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
     brandRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md },
-    brandLogo: { width: 26, height: 26, borderRadius: Radius.tight },
     brand: { ...Type.label, color: theme.textSecondary, letterSpacing: 1.6 },
 
     intro: { paddingTop: Spacing.huge, paddingBottom: Spacing.xxl },
