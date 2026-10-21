@@ -27,7 +27,7 @@
         ,"android.permission.VIBRATE"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0D1117",
+        "backgroundColor": "#1C1C19",
         "foregroundImage": "./assets/images/zo-zar-mark-flat.png",
         "monochromeImage": "./assets/images/zo-zar-mark-monochrome.png"
       },
@@ -42,12 +42,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FAF8F5",
-          "image": "./assets/images/zo-zar-mark-flat.png",
-          "imageWidth": 92,
+          "backgroundColor": "#F6F0E4",
+          "image": "./assets/images/zo-zar-splash-light.png",
+          "imageWidth": 132,
           "dark": {
-            "backgroundColor": "#0D1117",
-            "image": "./assets/images/zo-zar-mark-flat.png"
+            "backgroundColor": "#1C1C19",
+            "image": "./assets/images/zo-zar-splash-dark.png"
           }
         }
       ],
@@ -55,7 +55,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/zo-zar-mark-monochrome.png",
-          "color": "#F2A94B",
+          "color": "#E7BB72",
           "defaultChannel": "zo-zar-wake-alarms-v3-zozar",
           "sounds": [
             "./assets/audio/bright_rise.wav",

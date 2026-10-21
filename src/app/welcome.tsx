@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Arrive } from '@/components/motion';
@@ -17,6 +17,7 @@ import {
   nowMinutes,
   speakDuration,
 } from '@/lib/time';
+import { ZozarMark } from '@/components/zozar-mark';
 
 /**
  * The threshold, in Hearth.
@@ -104,12 +105,7 @@ export default function WelcomeRoute() {
         showsVerticalScrollIndicator={false}
       >
         <View style={local.brandRow}>
-          <Image
-            source={require('../../assets/images/zo-zar-mark-flat.png')}
-            style={local.brandLogo}
-            resizeMode="contain"
-            accessibilityIgnoresInvertColors
-          />
+          <ZozarMark height={22} decorative />
           <Text style={local.brand}>ZO-ZAR</Text>
         </View>
 
@@ -174,7 +170,6 @@ const makeStyles = (theme: Theme) =>
     },
 
     brandRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    brandLogo: { width: 26, height: 26, borderRadius: Radius.tight },
     brand: { ...Type.label, color: theme.textSecondary, letterSpacing: 1.6 },
 
     middle: { flex: 1, justifyContent: 'center', paddingVertical: Spacing.xl },

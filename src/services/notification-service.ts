@@ -76,7 +76,7 @@ export async function configureNotificationChannels(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 500, 250, 500, 250, 800],
     enableLights: true,
-    lightColor: '#F2A94B',
+    lightColor: '#E7BB72',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     showBadge: false,
     audioAttributes: {
@@ -98,7 +98,7 @@ export async function configureNotificationChannels(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 500, 250, 500, 250, 800],
     enableLights: true,
-    lightColor: '#F2A94B',
+    lightColor: '#E7BB72',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     showBadge: false,
     audioAttributes: {
@@ -120,7 +120,7 @@ export async function configureNotificationChannels(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 150],
     enableLights: false,
-    lightColor: '#F2A94B',
+    lightColor: '#E7BB72',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     showBadge: true,
   });

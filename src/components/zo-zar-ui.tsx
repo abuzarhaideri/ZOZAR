@@ -48,6 +48,7 @@ import { useAppearance, type AppearancePreference } from './appearance-provider'
 import { Touchable, minTargetStyle } from './motion';
 import { Fonts, IconSize, IconStroke, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { useZOZARStore } from './zo-zar-store';
+import { ZozarMark } from './zozar-mark';
 
 export function useZOZARTheme() {
   const { theme } = useAppearance();
@@ -502,7 +503,7 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
         borderless
         style={styles.brandRow}
       >
-        <Image source={require('../../assets/images/zo-zar-mark-flat.png')} style={styles.brandLogo} resizeMode="contain" />
+        <ZozarMark height={22} decorative />
         <Text style={styles.brand}>ZO-ZAR</Text>
       </Touchable>
 
@@ -666,7 +667,6 @@ function makeUIStyles(theme: Theme) {
     // Chrome stays quiet: it is navigation, not content.
     brandBar: { minHeight: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     brandRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingRight: Spacing.sm },
-    brandLogo: { width: 26, height: 26, borderRadius: Radius.tight },
     brand: { ...Type.label, color: theme.textSecondary, letterSpacing: 1.6 },
     profileRow: {
       minHeight: 48,
