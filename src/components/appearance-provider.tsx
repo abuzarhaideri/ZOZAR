@@ -13,6 +13,8 @@ type AppearanceContextValue = {
   theme: Theme;
   hydrated: boolean;
   setPreference: (next: AppearancePreference) => Promise<void>;
+  /** Switch to the opposite of what is on screen now, saved as an explicit choice. */
+  toggleAppearance: () => Promise<void>;
 };
 
 const STORAGE_KEY = 'zo-zar.appearance.v1';
@@ -42,6 +44,8 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
     let mounted = true;
     void readPreference().then((saved) => {
       if (mounted) updatePreference(saved);
+    }).catch(() => {
+      // Unreadable storage: keep following the device.
     }).finally(() => {
       if (mounted) setHydrated(true);
     });
@@ -51,16 +55,24 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
   const resolvedAppearance: ResolvedAppearance = preference === 'system'
     ? (systemAppearance === 'dark' ? 'dark' : 'light')
     : preference;
-  const value = useMemo<AppearanceContextValue>(() => ({
-    preference,
-    resolvedAppearance,
-    theme: Colors[resolvedAppearance],
-    hydrated,
-    setPreference: async (next) => {
+  const value = useMemo<AppearanceContextValue>(() => {
+    const setPreference = async (next: AppearancePreference) => {
       updatePreference(next);
-      await persistPreference(next);
-    },
-  }), [hydrated, preference, resolvedAppearance]);
+      try {
+        await persistPreference(next);
+      } catch {
+        // The choice still applies for this session; failing to save it is not worth an error.
+      }
+    };
+    return {
+      preference,
+      resolvedAppearance,
+      theme: Colors[resolvedAppearance],
+      hydrated,
+      setPreference,
+      toggleAppearance: () => setPreference(resolvedAppearance === 'dark' ? 'light' : 'dark'),
+    };
+  }, [hydrated, preference, resolvedAppearance]);
 
   if (!hydrated) {
     const initial = Colors[systemAppearance === 'dark' ? 'dark' : 'light'];

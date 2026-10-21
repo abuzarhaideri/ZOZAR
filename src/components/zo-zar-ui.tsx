@@ -38,14 +38,16 @@ import {
   UserPlus,
   Users,
   Moon,
+  Sun,
   MailOpen,
   Clock3,
   RotateCw,
   type LucideIcon,
 } from 'lucide-react-native';
 
-import { useAppearance, type AppearancePreference } from './appearance-provider';
-import { Touchable, minTargetStyle } from './motion';
+import { useAppearance } from './appearance-provider';
+import { Touchable, announce, minTargetStyle } from './motion';
+import { StreakCard } from './streak-badge';
 import { Fonts, IconSize, IconStroke, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { useZOZARStore } from './zo-zar-store';
 import { ZozarMark } from './zozar-mark';
@@ -486,7 +488,12 @@ export function OptionRow({
 
 export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
   const { theme, styles } = useZOZARTheme();
-  const { preference, setPreference } = useAppearance();
+  const { resolvedAppearance, setPreference, toggleAppearance } = useAppearance();
+  const isDark = resolvedAppearance === 'dark';
+  const followDevice = () => {
+    void setPreference('system');
+    announce("Following your device's appearance");
+  };
   const { signOut, updateProfilePhoto, userName, profilePhotoUri } = useZOZARStore();
   const [accountOpen, setAccountOpen] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -507,27 +514,46 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
         <Text style={styles.brand}>ZO-ZAR</Text>
       </Touchable>
 
-      {showProfile ? (
+      <View style={styles.brandActions}>
         <Touchable
           accessibilityRole="button"
-          accessibilityLabel="Open account settings"
-          onPress={() => setAccountOpen(true)}
+          accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          accessibilityHint="Long press to follow your device's appearance"
+          accessibilityActions={[{ name: 'followDevice', label: 'Follow device appearance' }]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'followDevice') followDevice();
+          }}
+          onPress={() => void toggleAppearance()}
+          onLongPress={followDevice}
           rippleColor={theme.surfaceStrong}
-          style={styles.profileRow}
+          borderless
+          style={styles.appearanceToggle}
         >
-          <View style={[styles.avatar, { backgroundColor: theme.warmSurface }]}>
-            {profilePhotoUri ? (
-              <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarCharacter}>{avatarCharacter}</Text>
-            )}
-          </View>
-          <Text numberOfLines={1} style={styles.profileName}>
-            {profileName}
-          </Text>
-          <Icon as={ChevronDown} size={IconSize.sm} color={theme.subtle} />
+          <Icon as={isDark ? Sun : Moon} size={IconSize.md} color={theme.textSecondary} />
         </Touchable>
-      ) : null}
+
+        {showProfile ? (
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel="Open account settings"
+            onPress={() => setAccountOpen(true)}
+            rippleColor={theme.surfaceStrong}
+            style={styles.profileRow}
+          >
+            <View style={[styles.avatar, { backgroundColor: theme.warmSurface }]}>
+              {profilePhotoUri ? (
+                <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarCharacter}>{avatarCharacter}</Text>
+              )}
+            </View>
+            <Text numberOfLines={1} style={styles.profileName}>
+              {profileName}
+            </Text>
+            <Icon as={ChevronDown} size={IconSize.sm} color={theme.subtle} />
+          </Touchable>
+        ) : null}
+      </View>
 
       <Modal visible={accountOpen} transparent animationType="fade" onRequestClose={() => setAccountOpen(false)}>
         <Pressable
@@ -539,9 +565,6 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
         <SafeAreaView pointerEvents="box-none" style={styles.accountOverlay}>
           <View accessibilityViewIsModal style={styles.accountSheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.accountTitle}>{profileName}</Text>
-            <Text style={styles.cardDetail}>Choose how ZO-ZAR looks on this device.</Text>
-
             <Touchable
               accessibilityRole="button"
               accessibilityLabel="Choose profile photo"
@@ -563,7 +586,7 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
                   }
                 }
               }}
-              style={[styles.appearanceOption, { marginTop: Spacing.lg }]}
+              style={styles.appearanceOption}
             >
               <Text style={styles.optionLabel}>
                 {photoBusy ? 'Uploading photo' : profilePhotoUri ? 'Change profile photo' : 'Add profile photo'}
@@ -571,24 +594,10 @@ export function BrandBar({ showProfile = true }: { showProfile?: boolean }) {
               <Icon as={Plus} size={IconSize.md} color={theme.accent} />
             </Touchable>
 
-            <View accessibilityRole="radiogroup" style={styles.appearanceGroup}>
-              {(['system', 'light', 'dark'] as AppearancePreference[]).map((option) => (
-                <Touchable
-                  key={option}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: preference === option }}
-                  accessibilityLabel={option}
-                  onPress={() => void setPreference(option)}
-                  rippleColor={theme.surfaceStrong}
-                  style={[
-                    styles.appearanceOption,
-                    preference === option && { borderColor: theme.accent, backgroundColor: theme.backgroundSelected },
-                  ]}
-                >
-                  <Text style={styles.optionLabel}>{option[0]!.toUpperCase() + option.slice(1)}</Text>
-                  {preference === option ? <Icon as={Check} size={IconSize.md} color={theme.accent} /> : null}
-                </Touchable>
-              ))}
+            <Text style={[styles.accountTitle, styles.accountName]}>{profileName}</Text>
+
+            <View style={styles.streakSlot}>
+              <StreakCard />
             </View>
 
             <Touchable
@@ -644,6 +653,8 @@ export const Icons = {
   send: Send,
   shield: ShieldCheck,
   moon: Moon,
+  /** Plain sun, for daylight/light mode. `sun` above is the sunrise glyph. */
+  sunFull: Sun,
   letter: MailOpen,
   clock: Clock3,
   refresh: RotateCw,
@@ -666,11 +677,13 @@ function makeUIStyles(theme: Theme) {
 
     // Chrome stays quiet: it is navigation, not content.
     brandBar: { minHeight: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    brandActions: { maxWidth: '65%', flexShrink: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+    appearanceToggle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
     brandRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingRight: Spacing.sm },
     brand: { ...Type.label, color: theme.textSecondary, letterSpacing: 1.6 },
     profileRow: {
       minHeight: 48,
-      maxWidth: '55%',
+      flexShrink: 1,
       flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.sm,
@@ -817,6 +830,8 @@ function makeUIStyles(theme: Theme) {
       marginBottom: Spacing.xl,
     },
     accountTitle: { ...Type.title, color: theme.text },
+    accountName: { marginTop: Spacing.lg },
+    streakSlot: { marginTop: Spacing.lg, marginBottom: Spacing.md },
     appearanceGroup: { gap: Spacing.sm, marginVertical: Spacing.xl },
     appearanceOption: {
       minHeight: 52,
