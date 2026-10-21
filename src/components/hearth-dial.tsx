@@ -226,7 +226,11 @@ export function HearthDial({
         if (success) runOnJS(open)();
       });
 
-    return Gesture.Exclusive(turn, tap);
+    // Only compose when there is something to turn. Exclusive lets the tap fire once the
+    // turn has *failed*, and a disabled gesture never fails — so with no alarm, the one
+    // state where a new person must tap the dial to set their first alarm, the tap was
+    // blocked forever and the dial did nothing.
+    return canTurn ? Gesture.Exclusive(turn, tap) : tap;
     // commit/clear/open read refs or setters; rebuilding on `committed` keeps commit's base current.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canTurn, committed]);

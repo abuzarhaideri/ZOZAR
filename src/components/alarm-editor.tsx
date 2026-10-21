@@ -602,7 +602,11 @@ const makeStyles = (theme: Theme) =>
     groupLabel: { ...Type.label, color: theme.textSecondary, marginBottom: Spacing.sm },
 
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    weekdays: { marginTop: Spacing.md },
+    // Seven days in one row, always. With flexGrow and wrap, six fitted at phone width and
+    // Saturday fell onto a line of its own, stretched full width — reading as a separate
+    // control rather than one of the week. Equal flex columns with a tight gap keep each
+    // day at ~48dp on a 360dp-wide phone.
+    weekdays: { marginTop: Spacing.md, flexWrap: 'nowrap', gap: Spacing.xs },
     chip: {
       minHeight: MinTarget,
       flexGrow: 1,
@@ -614,7 +618,7 @@ const makeStyles = (theme: Theme) =>
       justifyContent: 'center',
       overflow: 'hidden',
     },
-    chipCompact: { minWidth: MinTarget, paddingHorizontal: Spacing.sm },
+    chipCompact: { flex: 1, flexBasis: 0, flexGrow: 1, minWidth: 0, paddingHorizontal: 0 },
     chipSelected: { backgroundColor: theme.backgroundSelected },
     chipText: { ...Type.action, color: theme.text, textAlign: 'center' },
     chipTextSelected: { color: theme.accent },

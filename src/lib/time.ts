@@ -65,9 +65,13 @@ let cachedTwelveHour: boolean | null = null;
  */
 export function usesTwelveHourClock(): boolean {
   if (cachedTwelveHour !== null) return cachedTwelveHour;
+  // Format 13:00 and look at the result, rather than reading `resolvedOptions().hourCycle`.
+  // Hermes on Android does not reliably report hourCycle, and a missing value would put
+  // every Android phone on a 24-hour clock regardless of its setting. "13" in the output
+  // means a 24-hour clock; anything else ("1 PM", "1 pm", "午後1時") means twelve.
   try {
-    const cycle = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
-    cachedTwelveHour = cycle === 'h11' || cycle === 'h12';
+    const sample = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2020, 0, 1, 13));
+    cachedTwelveHour = !/13/.test(sample);
   } catch {
     cachedTwelveHour = false;
   }
