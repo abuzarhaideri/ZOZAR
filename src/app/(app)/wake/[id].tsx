@@ -8,22 +8,9 @@ import { IconSize, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { clockParts, dayPart, minutesOf } from '@/lib/time';
 import { useZOZARStore, type WakePlan } from '@/components/zo-zar-store';
 import { isProtected, type RepositoryWakeOccurrence } from '@/components/zo-zar-repository';
+import { challengeFor, isCorrectAnswer } from '@/lib/wake-challenge';
 
 type ChallengeState = { plan: WakePlan; occurrence: RepositoryWakeOccurrence } | null;
-
-function challengeFor(difficulty: WakePlan['difficulty'], seedValue: string) {
-  const seed = [...seedValue].reduce((total, character) => total + character.charCodeAt(0), 0);
-  if (difficulty === 'Easy') {
-    const a = 3 + seed % 6; const b = 1 + seed % 3; const c = 5 + seed % 4; const d = 1 + seed % 4;
-    return [{ prompt: `What is ${a} + ${b}?`, answer: `${a + b}` }, { prompt: `What is ${c} − ${d}?`, answer: `${c - d}` }];
-  }
-  if (difficulty === 'Medium') {
-    const a = 24 + seed % 31; const b = 12 + seed % 17; const c = 61 + seed % 25; const d = 20 + seed % 20; const e = 33 + seed % 30; const f = 11 + seed % 19;
-    return [{ prompt: `What is ${a} + ${b}?`, answer: `${a + b}` }, { prompt: `What is ${c} − ${d}?`, answer: `${c - d}` }, { prompt: `What is ${e} + ${f}?`, answer: `${e + f}` }];
-  }
-  const passage = 'Morning arrives quietly, and I meet it with patience. I breathe, sit up, place my feet on the floor, drink some water, and begin this new day with calm focus.';
-  return [{ prompt: `Type this passage exactly:\n\n${passage}`, answer: passage }];
-}
 
 export default function WakeConfirmationRoute() {
   const { styles, theme } = useZOZARTheme();
@@ -80,8 +67,7 @@ export default function WakeConfirmationRoute() {
 
   async function finish() {
     if (!challenge || !occurrenceId) return;
-    const expected = challengeSteps[step]?.answer ?? '';
-    if (answer.trim() !== expected) {
+    if (!isCorrectAnswer(challengeSteps[step], answer)) {
       setError('That answer is not quite right. Try again.');
       return;
     }

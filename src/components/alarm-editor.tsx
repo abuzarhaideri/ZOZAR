@@ -5,6 +5,7 @@ import { ChevronUp } from 'lucide-react-native';
 import { HearthRow, Icon, Icons, PrimaryButton, RowMark, SecondaryButton, useZOZARTheme } from './zo-zar-ui';
 import { Touchable } from './motion';
 import { AlarmDatePicker, AlarmTimePicker, formatAlarmTime } from './alarm-time-picker';
+import { ChallengePractice } from './challenge-practice';
 import type { RepositoryCircleMember, RepositoryCommitment, RepositoryWakePlan, UiDifficulty } from './zo-zar-repository';
 import { IconSize, MinTarget, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { wakeSoundLabel } from '@/services/notification-service';
@@ -202,6 +203,9 @@ export function AlarmEditor({
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState<Section | null>(null);
+  // The difficulty being practised, or null. Separate from value.difficulty: trying a level
+  // never selects it, and the editor's unsaved state is untouched underneath.
+  const [practising, setPractising] = useState<UiDifficulty | null>(null);
   const previewUnavailable = Platform.OS === 'web';
   const trustedMembers = useMemo(() => members.filter((member) => member.status === 'Accepted'), [members]);
   const pendingMembers = useMemo(() => members.filter((member) => member.status === 'Pending'), [members]);
@@ -448,20 +452,45 @@ export function AlarmEditor({
           </View>
         ) : null}
 
-        {sectionRow('challenge', 'Wake challenge', value.difficulty, <RowMark icon={Icons.listChecks} />)}
+        {sectionRow(
+          'challenge',
+          'Wake challenge',
+          open === 'challenge' ? `${value.difficulty}, tap Try to practise` : `${value.difficulty}, open to practise any level`,
+          <RowMark icon={Icons.listChecks} />,
+        )}
         {open === 'challenge' ? (
-          <View style={styles.panel} accessibilityRole="radiogroup">
+          <View style={styles.panel}>
+            {/*
+              Try is a sibling of the option, never inside it. Nested, a tap on Try would
+              also select the level, and practice must not change what is chosen.
+            */}
             {(['Easy', 'Medium', 'Hard'] as UiDifficulty[]).map((difficulty) => (
-              <ChoiceRow
-                key={difficulty}
-                label={difficulty}
-                detail={difficultyDetail[difficulty]}
-                selected={value.difficulty === difficulty}
-                onPress={() => set('difficulty', difficulty)}
-                styles={styles}
-                theme={theme}
-              />
+              <View key={difficulty} style={styles.choiceWithAction}>
+                <View style={styles.choiceMain}>
+                  <ChoiceRow
+                    label={difficulty}
+                    detail={difficultyDetail[difficulty]}
+                    selected={value.difficulty === difficulty}
+                    onPress={() => set('difficulty', difficulty)}
+                    styles={styles}
+                    theme={theme}
+                  />
+                </View>
+                <Touchable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Try the ${difficulty} challenge`}
+                  accessibilityHint="Opens a practice run. Your alarm and its settings are not changed."
+                  onPress={() => setPractising(difficulty)}
+                  rippleColor={theme.surfaceStrong}
+                  style={styles.tryAction}
+                >
+                  <Text style={styles.tryLabel}>Try</Text>
+                </Touchable>
+              </View>
             ))}
+            <Text style={styles.panelNote}>
+              Practice works before you save, and never stops a real alarm or tells anyone.
+            </Text>
           </View>
         ) : null}
 
@@ -496,6 +525,8 @@ export function AlarmEditor({
           </View>
         ) : null}
       </View>
+
+      <ChallengePractice difficulty={practising} onClose={() => setPractising(null)} />
 
       {error ? (
         <View style={styles.error}>
@@ -643,6 +674,18 @@ const makeStyles = (theme: Theme) =>
       overflow: 'hidden',
     },
     choiceSelected: { backgroundColor: theme.backgroundSelected },
+    choiceWithAction: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+    choiceMain: { flex: 1, minWidth: 0 },
+    tryAction: {
+      minHeight: MinTarget,
+      minWidth: MinTarget + Spacing.md,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.row,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    tryLabel: { ...Type.action, color: theme.text },
     choiceCopy: { flex: 1, minWidth: 0 },
     choiceLabel: { ...Type.callout, fontSize: 16, color: theme.text },
     choiceLabelSelected: { color: theme.accent },
