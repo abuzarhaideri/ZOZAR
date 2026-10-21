@@ -1,17 +1,9 @@
 import { File } from 'expo-file-system';
-import { Channel, ID, Permission, Query, Role, type Models } from 'react-native-appwrite';
 
-import {
-  appwrite,
-  appwriteConfig,
-  appwriteTableIds,
-  cacheAppwriteIdentity,
-  isAppwriteConfigured,
-  isDefinitiveAppwriteAuthFailure,
-  readCachedAppwriteIdentity,
-} from '@/lib/appwrite-client';
 import type { VoiceNoteArtifact } from '@/services/voice-recorder-service';
 import type { PushTokenRegistration } from '@/services/push-token-service';
+import { isApiConfigured } from '@/lib/api-client';
+import { createRestRepository } from './rest-repository';
 import type {
   Commitment as DomainCommitment,
   Difficulty as DomainDifficulty,
@@ -21,10 +13,23 @@ import type {
   WakeSoundKey,
 } from '@/types/domain';
 
-export type RepositoryMode = 'APPWRITE' | 'LOCAL_FALLBACK';
+export type RepositoryMode = 'REST' | 'LOCAL_FALLBACK';
 export type UiDifficulty = 'Easy' | 'Medium' | 'Hard';
 export type RepositorySession = { userId: string; email?: string; displayName?: string; profilePhotoUri?: string };
 export type RepositoryAuthResult = { session: RepositorySession | null; requiresEmailConfirmation: boolean };
+/**
+ * The label a plan carries when nobody will be told, and the only way to test for it.
+ *
+ * Screens used to compare `protectedBy` against this literal string. Rewording the
+ * label would then have made the ringing screen claim someone would be told when nobody
+ * would — a false protection claim on the one screen that must never make one.
+ */
+export const UNPROTECTED_LABEL = 'No trusted person yet';
+
+export function isProtected(plan: { protectedBy: string }): boolean {
+  return plan.protectedBy !== UNPROTECTED_LABEL;
+}
+
 export type RepositoryCommitment = { id: string; title: string; detail: string; dateLabel: string; time: string; startsAt: string; done: boolean };
 
 export type RepositoryWakePlan = {
@@ -217,7 +222,7 @@ function nextOccurrenceForValues(
 function mapCommitment(row: Record<string, any>): RepositoryCommitment {
   const startsAt = row.startsAt ?? row.starts_at;
   const date = new Date(startsAt);
-  return { id: row.$id ?? row.id, title: row.title, detail: row.description ?? 'Personal · Commitment', dateLabel: date.toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: row.status === 'completed' };
+  return { id: row.$id ?? row.id, title: row.title, detail: row.description ?? '', dateLabel: date.toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: row.status === 'completed' };
 }
 
 function mapWakePlan(row: Record<string, any>, occurrence?: RepositoryWakeOccurrence): RepositoryWakePlan {
@@ -231,7 +236,7 @@ function mapWakePlan(row: Record<string, any>, occurrence?: RepositoryWakeOccurr
     soundKey: row.soundKey ?? row.sound_key ?? 'zo-zar',
     status: (row.isActive ?? row.is_active) ? 'Active' : 'Paused',
     graceMinutes: row.graceMinutes ?? row.grace_period_minutes,
-    protectedBy: (row.connectionId ?? row.circle_id) ? 'Your trusted person' : 'No trusted person yet',
+    protectedBy: (row.connectionId ?? row.circle_id) ? 'Your trusted person' : UNPROTECTED_LABEL,
     commitmentId: row.commitmentId ?? row.commitment_id ?? null,
     circleId: row.connectionId ?? row.circle_id ?? null,
     scheduleType,
@@ -257,7 +262,7 @@ function localPlanFromInput(input: RepositoryWakePlanInput, id: string): Reposit
     soundKey: input.soundKey ?? 'zo-zar',
     status: input.active ? 'Active' : 'Paused',
     graceMinutes: input.graceMinutes ?? 10,
-    protectedBy: input.circleId ? 'Your trusted circle' : 'No trusted person yet',
+    protectedBy: input.circleId ? 'Your trusted circle' : UNPROTECTED_LABEL,
     commitmentId: input.commitmentId ?? null,
     circleId: input.circleId ?? null,
     scheduleType: input.scheduleType,
@@ -308,7 +313,7 @@ function localRepository(): ZOZARRepository {
       ...(input.soundKey === undefined ? {} : { soundKey: input.soundKey }),
       ...(input.active === undefined ? {} : { status: input.active ? 'Active' as const : 'Paused' as const }),
       ...(input.commitmentId === undefined ? {} : { commitmentId: input.commitmentId }),
-      ...(input.circleId === undefined ? {} : { circleId: input.circleId, protectedBy: input.circleId ? 'Your trusted circle' : 'No trusted person yet' }),
+      ...(input.circleId === undefined ? {} : { circleId: input.circleId, protectedBy: input.circleId ? 'Your trusted circle' : UNPROTECTED_LABEL }),
       ...(input.scheduleType === undefined ? {} : { scheduleType: input.scheduleType, repeatLabel: input.scheduleType === 'once' ? 'One time' : input.scheduleType === 'daily' ? 'Every day' : 'Selected weekdays' }),
       ...(input.scheduledDate === undefined ? {} : { scheduledDate: input.scheduledDate }),
       ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
@@ -339,7 +344,7 @@ function localRepository(): ZOZARRepository {
     createCommitment: async (title, time) => {
       const startsAt = commitmentDate(time).toISOString();
       if (new Date(startsAt).getTime() <= Date.now()) throw new Error('Choose a future date and time for this commitment.');
-      const item = { id: `local-${Date.now()}`, title, detail: 'Personal · Commitment', dateLabel: new Date(startsAt).toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: false };
+      const item = { id: `local-${Date.now()}`, title, detail: '', dateLabel: new Date(startsAt).toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: false };
       commitments = [...commitments, item];
       return item;
     },
@@ -370,11 +375,11 @@ function localRepository(): ZOZARRepository {
     confirmWake: async (occurrenceId) => { if (!wakeOccurrences.some((item) => item.id === occurrenceId)) throw new Error('No active wake occurrence is available to confirm.'); wakeOccurrences = wakeOccurrences.map((item) => item.id === occurrenceId ? { ...item, status: 'confirmed' } : item); },
     recordWakeSnooze: async () => undefined,
     listCircleMembers: async () => members,
-    inviteCircleMember: async (email) => { const name = email.split('@')[0]; members = [...members, { id: `local-member-${Date.now()}`, name, initials: initials(name), detail: 'Circle invite · Pending', status: 'Pending', relationship: 'outgoing' }]; },
+    inviteCircleMember: async (email) => { const name = email.split('@')[0]; members = [...members, { id: `local-member-${Date.now()}`, name, initials: initials(name), detail: 'Invited, waiting for them', status: 'Pending', relationship: 'outgoing' }]; },
     respondToCircleInvitation: async (id, accept) => {
       if (!members.some((member) => member.id === id)) throw new Error('Invitation was not found.');
       members = accept
-        ? members.map((member) => member.id === id ? { ...member, status: 'Accepted', detail: 'Wake support · Accepted' } : member)
+        ? members.map((member) => member.id === id ? { ...member, status: 'Accepted', detail: 'Accepted' } : member)
         : members.filter((member) => member.id !== id);
     },
     removeCircleMember: async (id) => { members = members.filter((member) => member.id !== id); },
@@ -391,312 +396,27 @@ function localRepository(): ZOZARRepository {
   };
 }
 
-class AppwriteRepository implements ZOZARRepository {
-  readonly mode = 'APPWRITE' as const;
-  private session: RepositorySession | null = null;
-
-  async signUp(name: string, email: string, password: string) {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized) throw new Error('Enter your email address.');
-    if (password.length < 8) throw new Error('Use at least 8 characters for your password.');
-    const displayName = titleCase(name.trim() || normalized.split('@')[0]);
-    const user = await appwrite.account.create({ userId: ID.unique(), email: normalized, password, name: displayName });
-    await appwrite.account.createEmailPasswordSession({ email: normalized, password });
-    await appwrite.tables.createRow({
-      databaseId: appwriteConfig.databaseId,
-      tableId: appwriteTableIds.profiles,
-      rowId: user.$id,
-      data: { email: normalized, displayName, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, photoFileId: null },
-      permissions: ownerPermissions(user.$id),
-    });
-    const next = { userId: user.$id, email: normalized, displayName };
-    this.session = next;
-    await cacheAppwriteIdentity(next);
-    await this.invokeAction('claim-invitations', {}, `claim:${user.$id}`).catch(() => undefined);
-    return { session: next, requiresEmailConfirmation: false };
-  }
-
-  async signIn(email: string, password: string) {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized) throw new Error('Enter your email address.');
-    if (!password) throw new Error('Enter your password.');
-    await appwrite.account.createEmailPasswordSession({ email: normalized, password });
-    const user = await appwrite.account.get();
-    const profile = await this.getProfile(user.$id).catch(() => null);
-    const next = { userId: user.$id, email: user.email, displayName: titleCase(profile?.displayName ?? user.name ?? normalized.split('@')[0]), profilePhotoUri: profile?.photoFileId ? this.fileUrl(profile.photoFileId) : undefined };
-    this.session = next;
-    await cacheAppwriteIdentity(next);
-    await this.invokeAction('claim-invitations', {}, `claim:${user.$id}`).catch(() => undefined);
-    return next;
-  }
-
-  async restoreSession() {
-    const cached = await readCachedAppwriteIdentity();
-    try {
-      const user = await appwrite.account.get();
-      const profile = await this.getProfile(user.$id).catch(() => null);
-      const next = { userId: user.$id, email: user.email, displayName: titleCase(profile?.displayName ?? user.name ?? user.email.split('@')[0]), profilePhotoUri: profile?.photoFileId ? this.fileUrl(profile.photoFileId) : undefined };
-      this.session = next;
-      await cacheAppwriteIdentity(next);
-      return next;
-    } catch (caught) {
-      if (!isDefinitiveAppwriteAuthFailure(caught) && cached) {
-        this.session = cached;
-        return cached;
-      }
-      if (isDefinitiveAppwriteAuthFailure(caught)) await cacheAppwriteIdentity(null);
-      return null;
-    }
-  }
-
-  async signOut() {
-    try { await appwrite.account.deleteSession({ sessionId: 'current' }); } finally { this.session = null; await cacheAppwriteIdentity(null); }
-  }
-
-  async updateProfilePhoto(uri: string) {
-    const source = new File(uri);
-    const extension = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
-    const mimeType = extension === 'png' ? 'image/png' : 'image/jpeg';
-    const file = await appwrite.storage.createFile({ bucketId: appwriteConfig.storageBucketId, fileId: ID.unique(), file: { name: `profile-${Date.now()}.${extension}`, type: mimeType, size: source.size ?? 0, uri }, permissions: ownerPermissions(this.requireUser()), folder: 'profiles' });
-    try {
-      await this.invokeAction('set-profile-photo', { fileId: file.$id }, `profile-photo:${file.$id}`);
-      const next = this.fileUrl(file.$id);
-      if (this.session) { this.session = { ...this.session, profilePhotoUri: next }; await cacheAppwriteIdentity(this.session); }
-      return next;
-    } catch (caught) {
-      await appwrite.storage.deleteFile({ bucketId: appwriteConfig.storageBucketId, fileId: file.$id }).catch(() => undefined);
-      throw caught;
-    }
-  }
-
-  async listCommitments() {
-    const result = await this.list(appwriteTableIds.commitments, [Query.equal('userId', [this.requireUser()]), Query.orderAsc('startsAt')]);
-    return result.map(mapCommitment);
-  }
-
-  async createCommitment(title: string, time: string) {
-    const startsAt = commitmentDate(time).toISOString();
-    if (new Date(startsAt).getTime() <= Date.now()) throw new Error('Choose a future date and time for this commitment.');
-    const row = await this.createOwnerRow(appwriteTableIds.commitments, { userId: this.requireUser(), title: title.trim(), description: 'Personal · Commitment', startsAt, status: 'planned', completedAt: null });
-    return mapCommitment(row);
-  }
-
-  async updateCommitment(id: string, title: string, startsAt: string) {
-    if (new Date(startsAt).getTime() <= Date.now()) throw new Error('Choose a future date and time for this commitment.');
-    const row = await this.update(appwriteTableIds.commitments, id, { title: title.trim(), startsAt });
-    return mapCommitment(row);
-  }
-
-  async deleteCommitment(id: string) { await this.remove(appwriteTableIds.commitments, id); }
-
-  async setCommitmentComplete(id: string, complete: boolean) { await this.update(appwriteTableIds.commitments, id, { status: complete ? 'completed' : 'planned', completedAt: complete ? new Date().toISOString() : null }); }
-  async getWakePlan() { return (await this.listWakePlans())[0] ?? null; }
-
-  async listWakePlans() {
-    const rows = await this.list(appwriteTableIds.wakePlans, [Query.equal('userId', [this.requireUser()]), Query.orderDesc('$createdAt')]);
-    return rows.map((row) => mapWakePlan(row));
-  }
-
-  async createWakePlan(input: RepositoryWakePlanInput) {
-    const existing = await this.list(appwriteTableIds.wakePlans, [Query.equal('userId', [this.requireUser()])]);
-    if (existing.length >= MAX_WAKE_PLANS) throw new Error('You can save up to three wake plans.');
-    const row = await this.createOwnerRow(appwriteTableIds.wakePlans, { userId: this.requireUser(), commitmentId: input.commitmentId ?? null, connectionId: input.circleId ?? null, scheduleType: input.scheduleType, scheduledDate: input.scheduledDate ?? null, localTime: to24HourTime(input.time), timezone: input.timezone, weekdays: input.weekdays ?? [], difficulty: toDomainDifficulty(input.difficulty), soundKey: input.soundKey ?? 'zo-zar', graceMinutes: input.graceMinutes ?? 10, isActive: false });
-    const created = mapWakePlan(row);
-    return input.active ? this.setWakePlanActive(created.id, true) : created;
-  }
-
-  async updateWakePlan(id: string, input: Partial<RepositoryWakePlanInput>) {
-    const plan = await this.update(appwriteTableIds.wakePlans, id, {
-      ...(input.commitmentId === undefined ? {} : { commitmentId: input.commitmentId }),
-      ...(input.circleId === undefined ? {} : { connectionId: input.circleId }),
-      ...(input.scheduleType === undefined ? {} : { scheduleType: input.scheduleType }),
-      ...(input.scheduledDate === undefined ? {} : { scheduledDate: input.scheduledDate }),
-      ...(input.time === undefined ? {} : { localTime: to24HourTime(input.time) }),
-      ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
-      ...(input.weekdays === undefined ? {} : { weekdays: input.weekdays }),
-      ...(input.difficulty === undefined ? {} : { difficulty: toDomainDifficulty(input.difficulty) }),
-      ...(input.soundKey === undefined ? {} : { soundKey: input.soundKey }),
-      ...(input.graceMinutes === undefined ? {} : { graceMinutes: input.graceMinutes }),
-      ...(input.active === undefined ? {} : { isActive: input.active }),
-    });
-    if (plan.isActive && input.active !== false) return this.upsertOccurrence(plan);
-    if (!plan.isActive) await this.cancelPlanOccurrences(id);
-    return mapWakePlan(plan);
-  }
-
-  async deleteWakePlan(id: string) {
-    await this.cancelPlanOccurrences(id);
-    await this.remove(appwriteTableIds.wakePlans, id);
-  }
-
-  async listWakeOccurrences(wakePlanId?: string) {
-    const queries = [Query.equal('userId', [this.requireUser()]), Query.orderAsc('scheduledFor')];
-    if (wakePlanId) queries.push(Query.equal('wakePlanId', [wakePlanId]));
-    const rows = await this.list(appwriteTableIds.wakeOccurrences, queries);
-    return rows.map(mapOccurrence);
-  }
-
-  async getWakeOccurrence(occurrenceId: string) {
-    if (!occurrenceId) return null;
-    try { return mapOccurrence(await this.get(appwriteTableIds.wakeOccurrences, occurrenceId)); } catch { return null; }
-  }
-
-  async setWakePlanActive(id: string, active: boolean) {
-    if (!id) throw new Error('Create a wake plan before activating wake protection.');
-    const plan = await this.update(appwriteTableIds.wakePlans, id, { isActive: active });
-    if (!active) { await this.cancelPlanOccurrences(id); return mapWakePlan(plan); }
-    return this.upsertOccurrence(plan);
-  }
-
-  async setWakeDifficulty(id: string, difficulty: UiDifficulty) {
-    if (!id) throw new Error('Create a wake plan before choosing a challenge.');
-    await this.update(appwriteTableIds.wakePlans, id, { difficulty: toDomainDifficulty(difficulty) });
-    const active = await this.list(appwriteTableIds.wakeOccurrences, [Query.equal('wakePlanId', [id]), Query.equal('status', ['scheduled', 'ringing'])]);
-    await Promise.all(active.map((row) => this.update(appwriteTableIds.wakeOccurrences, row.$id, { difficulty: toDomainDifficulty(difficulty) })));
-  }
-
-  async saveWakePlan(input: RepositoryWakePlanInput) { return input.id ? this.updateWakePlan(input.id, input) : this.createWakePlan(input); }
-
-  async confirmWake(occurrenceId: string) {
-    if (!occurrenceId) throw new Error('No wake occurrence is available to confirm.');
-    await this.invokeAction('complete-wake', { occurrenceId }, `wake-complete:${occurrenceId}`);
-  }
-
-  async recordWakeSnooze(occurrenceId: string) {
-    if (!occurrenceId) throw new Error('No wake occurrence is available to snooze.');
-    await this.invokeAction('snooze-wake', { occurrenceId }, `wake-snooze:${occurrenceId}`);
-  }
-
-  async listCircleMembers() {
-    const rows = await this.list(appwriteTableIds.connections, [Query.orderDesc('$createdAt')]);
-    const current = this.requireUser();
-    return rows
-      .filter((row) => row.status === 'accepted' || row.status === 'pending')
-      .map((row) => {
-        const relationship = row.recipientId === current ? 'incoming' : 'outgoing';
-        const name = titleCase(relationship === 'incoming' ? row.requesterDisplayName ?? 'Trusted person' : row.recipientDisplayName ?? row.recipientEmail?.split('@')[0] ?? 'Trusted person');
-        return {
-          id: row.$id,
-          name,
-          initials: initials(name),
-          detail: row.status === 'accepted'
-            ? 'Wake support · Accepted'
-            : relationship === 'incoming' ? 'Invitation received · Your choice' : 'Circle invite · Pending',
-          status: row.status === 'accepted' ? 'Accepted' : 'Pending',
-          relationship,
-          circleId: row.$id,
-        } as RepositoryCircleMember;
-      });
-  }
-
-  async inviteCircleMember(email: string) { await this.invokeAction('invite', { email: email.trim().toLowerCase() }, `invite:${email.trim().toLowerCase()}`); }
-
-  async respondToCircleInvitation(id: string, accept: boolean) { await this.invokeAction('respond-invitation', { connectionId: id, accept }, `respond:${id}:${accept}`); }
-
-  async removeCircleMember(id: string) { await this.invokeAction('remove-connection', { connectionId: id }, `remove:${id}`); }
-
-  async listMessages(threadId: string) {
-    const resolved = await this.resolveThreadId(threadId);
-    if (!resolved) return [];
-    const rows = await this.list(appwriteTableIds.messages, [Query.equal('threadId', [resolved]), Query.orderAsc('$createdAt')]);
-    return rows.map((row) => this.mapMessage(row, row.voicePath ? appwrite.storage.getFileViewURL(appwriteConfig.storageBucketId, row.voicePath).toString() : undefined));
-  }
-
-  async getChatRetention(threadId: string) {
-    const resolved = await this.resolveThreadId(threadId);
-    if (!resolved) return '30d';
-    const thread = await this.get(appwriteTableIds.chatThreads, resolved);
-    return thread.retention === '7d' ? '7d' : '30d';
-  }
-
-  async setChatRetention(threadId: string, retention: ChatRetention) {
-    const resolved = await this.resolveThreadId(threadId);
-    if (!resolved) throw new Error('Accept a trusted-person invitation before changing chat settings.');
-    await this.invokeAction('set-chat-retention', { threadId: resolved, retention }, `retention:${resolved}:${retention}:${Date.now()}`);
-  }
-
-  async subscribeMessages(threadId: string, onChange: () => void) {
-    const resolved = await this.resolveThreadId(threadId);
-    if (!resolved) return () => undefined;
-    const channel = Channel.tablesdb(appwriteConfig.databaseId).table(appwriteTableIds.messages).row();
-    const subscription = await appwrite.realtime.subscribe(channel, (event) => {
-      const payload = event.payload as Record<string, any>;
-      if (payload.threadId === resolved) onChange();
-    });
-    return () => { void subscription.unsubscribe(); };
-  }
-
-  async sendMessage(threadId: string, body: string) {
-    const resolved = await this.resolveThreadId(threadId);
-    if (!resolved) throw new Error('Accept a trusted-person invitation before starting a chat.');
-    const result = await this.invokeAction('send-message', { threadId: resolved, body: body.trim() }, `message:${resolved}:${Date.now()}`);
-    return result.message ? this.mapMessage(result.message) : null;
-  }
-
-  async sendVoiceNote(threadId: string, artifact: VoiceNoteArtifact) {
-    const resolved = await this.resolveThreadId(threadId);
-    if (!resolved) throw new Error('Accept a trusted-person invitation before sending a voice note.');
-    const source = new File(artifact.uri);
-    const file = await appwrite.storage.createFile({ bucketId: appwriteConfig.storageBucketId, fileId: ID.unique(), file: { name: artifact.fileName, type: artifact.mimeType, size: source.size ?? 0, uri: artifact.uri }, permissions: ownerPermissions(this.requireUser()), folder: `voice/${resolved}` });
-    try {
-      await this.invokeAction('finalize-voice-message', { threadId: resolved, fileId: file.$id, durationSeconds: Math.max(1, artifact.durationSeconds) }, `voice:${file.$id}`);
-    } catch (caught) {
-      await appwrite.storage.deleteFile({ bucketId: appwriteConfig.storageBucketId, fileId: file.$id }).catch(() => undefined);
-      throw caught;
-    }
-  }
-
-  async upsertDeviceToken(registration: PushTokenRegistration) { await this.invokeAction('upsert-device-token', { token: registration.nativeDeviceToken, platform: registration.platform }, `device:${registration.nativeDeviceToken}`); }
-  private mapMessage(row: Record<string, any>, voiceUri?: string): RepositoryChatMessage { return { id: row.$id ?? row.id, body: row.body ?? '', timestamp: displayTime(row.$createdAt ?? row.createdAt ?? row.created_at), author: row.senderId === this.requireUser() || row.sender_id === this.requireUser() ? 'me' : 'them', kind: row.type ?? row.message_type, voiceUri, expiresAt: row.expiresAt }; }
-  private async resolveThreadId(routeId: string) {
-    try { const direct = await this.get(appwriteTableIds.chatThreads, routeId); if (direct) return direct.$id; } catch {}
-    let connection: Record<string, any>;
-    try { connection = await this.get(appwriteTableIds.connections, routeId); } catch { return null; }
-    const currentUser = this.requireUser();
-    const otherUser = connection.requesterId === currentUser ? connection.recipientId : connection.requesterId;
-    if (!otherUser || otherUser === currentUser) return null;
-    const threads = await this.list(appwriteTableIds.chatThreads, [Query.orderAsc('$createdAt')]);
-    return threads.find((thread) =>
-      (thread.participantA === currentUser && thread.participantB === otherUser) ||
-      (thread.participantB === currentUser && thread.participantA === otherUser)
-    )?.$id ?? null;
-  }
-  private requireUser() { if (!this.session) throw new Error('Sign in is required.'); return this.session.userId; }
-  private async cancelPlanOccurrences(id: string) {
-    const rows = await this.list(appwriteTableIds.wakeOccurrences, [Query.equal('wakePlanId', [id]), Query.equal('status', ['scheduled', 'ringing'])]);
-    await Promise.all(rows.map((row) => this.update(appwriteTableIds.wakeOccurrences, row.$id, { status: 'cancelled' })));
-  }
-  private async upsertOccurrence(plan: Record<string, any>) {
-    await this.cancelPlanOccurrences(plan.$id);
-    const scheduledFor = nextOccurrenceForValues(plan.scheduleType, plan.scheduledDate, plan.localTime, plan.weekdays).toISOString();
-    const occurrence = await this.createOwnerRow(appwriteTableIds.wakeOccurrences, { wakePlanId: plan.$id, userId: this.requireUser(), commitmentId: plan.commitmentId ?? null, scheduledFor, difficulty: plan.difficulty, graceMinutes: plan.graceMinutes, challengePayload: '{}', status: 'scheduled', triggeredAt: null, confirmedAt: null, escalatedAt: null });
-    return mapWakePlan(plan, mapOccurrence(occurrence));
-  }
-  private async getProfile(userId: string) { return this.get(appwriteTableIds.profiles, userId); }
-  private fileUrl(fileId: string) { return appwrite.storage.getFileViewURL(appwriteConfig.storageBucketId, fileId).toString(); }
-  private async list(tableId: string, queries: string[] = []) {
-    const result = await appwrite.tables.listRows({ databaseId: appwriteConfig.databaseId, tableId, queries, total: false });
-    return result.rows as Array<Models.Row & Record<string, any>>;
-  }
-  private async get(tableId: string, rowId: string) { return appwrite.tables.getRow({ databaseId: appwriteConfig.databaseId, tableId, rowId }) as Promise<Models.Row & Record<string, any>>; }
-  private async createOwnerRow(tableId: string, data: Record<string, unknown>) { return appwrite.tables.createRow({ databaseId: appwriteConfig.databaseId, tableId, rowId: ID.unique(), data, permissions: ownerPermissions(this.requireUser()) }) as Promise<Models.Row & Record<string, any>>; }
-  private async update(tableId: string, rowId: string, data: Record<string, unknown>) { return appwrite.tables.updateRow({ databaseId: appwriteConfig.databaseId, tableId, rowId, data }) as Promise<Models.Row & Record<string, any>>; }
-  private async remove(tableId: string, rowId: string) { await appwrite.tables.deleteRow({ databaseId: appwriteConfig.databaseId, tableId, rowId }); }
-  private async invokeAction(action: string, payload: Record<string, unknown>, idempotencyKey: string) {
-    const execution = await appwrite.functions.createExecution({ functionId: appwriteConfig.actionsFunctionId, body: JSON.stringify({ action, payload, idempotencyKey }), async: false });
-    if (execution.responseStatusCode < 200 || execution.responseStatusCode >= 300) throw new Error(execution.responseBody || `ZO-ZAR action failed (${execution.responseStatusCode}).`);
-    return execution.responseBody ? JSON.parse(execution.responseBody) as Record<string, any> : {};
-  }
+/**
+ * Whether the repository persists to a server.
+ *
+ * The local fallback does not, so anything that only makes sense against a backend —
+ * registering a push token, refetching a list after a write — is gated on this rather
+ * than on a mode name. These checks previously compared against 'APPWRITE' in two places
+ * and both broke when the backend changed; naming the capability keeps the next change to
+ * one line.
+ */
+export function isServerBacked(mode: RepositoryMode): boolean {
+  return mode === 'REST';
 }
 
-function ownerPermissions(userId: string) {
-  return [Permission.read(Role.user(userId)), Permission.update(Role.user(userId)), Permission.delete(Role.user(userId))];
-}
-
-function titleCase(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).map((part) => part.charAt(0).toLocaleUpperCase() + part.slice(1).toLocaleLowerCase()).join(' ');
-}
-
+/**
+ * Builds the repository the app runs against.
+ *
+ * The REST implementation is used whenever the API is configured. The local fallback is
+ * not a second backend: it holds everything in memory for one session so the UI can be
+ * developed and demonstrated without a server, and it is what runs when
+ * EXPO_PUBLIC_API_URL is unset. Nothing it stores survives a reload.
+ */
 export function createZOZARRepository(): ZOZARRepository {
-  return isAppwriteConfigured() ? new AppwriteRepository() : localRepository();
+  return isApiConfigured() ? createRestRepository() : localRepository();
 }

@@ -1,3 +1,6 @@
+// Channel colours below use the palette's amber accent (Colors.dark.accent). Android
+// notification channels are immutable once created, so changing a colour only reaches
+// devices that have not yet created the channel; bump the channel id to force it.
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -65,7 +68,7 @@ export async function configureNotificationChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
   await Notifications.setNotificationChannelAsync(WAKE_CHANNEL_ID, {
-    name: 'ZO-ZAR wake alarms · ZO-ZAR sound',
+    name: 'Wake alarms (ZO-ZAR sound)',
     description: 'Time-critical alarms created by the user.',
     importance: Notifications.AndroidImportance.MAX,
     sound: WAKE_SOUND_FILE,
@@ -73,7 +76,7 @@ export async function configureNotificationChannels(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 500, 250, 500, 250, 800],
     enableLights: true,
-    lightColor: '#111111',
+    lightColor: '#F2A94B',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     showBadge: false,
     audioAttributes: {
@@ -87,7 +90,7 @@ export async function configureNotificationChannels(): Promise<void> {
   });
 
   await Notifications.setNotificationChannelAsync(WAKE_DEFAULT_CHANNEL_ID, {
-    name: 'ZO-ZAR wake alarms · Android default',
+    name: 'Wake alarms (device sound)',
     description: 'Time-critical alarms created by the user.',
     importance: Notifications.AndroidImportance.MAX,
     sound: WAKE_DEFAULT_SOUND,
@@ -95,7 +98,7 @@ export async function configureNotificationChannels(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 500, 250, 500, 250, 800],
     enableLights: true,
-    lightColor: '#111111',
+    lightColor: '#F2A94B',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     showBadge: false,
     audioAttributes: {
@@ -117,7 +120,7 @@ export async function configureNotificationChannels(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 150],
     enableLights: false,
-    lightColor: '#111111',
+    lightColor: '#F2A94B',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     showBadge: true,
   });

@@ -2,7 +2,10 @@ package expo.modules.zozarexactalarm
 
 import android.app.Activity
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -25,6 +28,16 @@ class ZoZarAlarmActivity : Activity() {
   private var prompts = emptyList<String>()
   private var input: EditText? = null
 
+  // Hearth dark palette. The ring screen is always dark: it is shown at night, over the lock screen.
+  private val colorBackground = Color.rgb(28, 28, 25)      // #1C1C19
+  private val colorSurface = Color.rgb(41, 41, 35)         // #292923
+  private val colorText = Color.rgb(243, 237, 223)         // #F3EDDF
+  private val colorTextSecondary = Color.rgb(183, 178, 164) // #B7B2A4
+  private val colorSubtle = Color.rgb(162, 157, 144)       // #A29D90, theme dark `subtle`, for hint text
+  private val colorFill = Color.rgb(231, 187, 114)         // #E7BB72
+  private val colorOnFill = Color.rgb(41, 35, 25)          // #292319
+  private val colorError = Color.rgb(238, 154, 134)        // #EE9A86
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
@@ -42,24 +55,27 @@ class ZoZarAlarmActivity : Activity() {
       orientation = LinearLayout.VERTICAL
       gravity = Gravity.CENTER_HORIZONTAL
       setPadding(dp(28), dp(52), dp(28), dp(30))
-      setBackgroundColor(Color.rgb(8, 13, 21))
+      setBackgroundColor(colorBackground)
     }
+    window.decorView.setBackgroundColor(colorBackground)
     setContentView(root)
-    root.addView(label("ZO-ZAR", 14f, Color.rgb(177, 186, 202)).apply { letterSpacing = .22f })
+    root.addView(label("ZO-ZAR", 14f, colorTextSecondary).apply { letterSpacing = .08f })
     root.addView(Space(this).apply { minimumHeight = dp(42) })
     return root
   }
 
   private fun showRing() {
     base()
-    val time = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
-    root.addView(label(time, 58f, Color.rgb(246, 244, 239)).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
-    root.addView(label(alarm.optString("title", "It’s time to wake up."), 24f, Color.rgb(246, 244, 239)).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(8)) })
-    root.addView(label("A gentle start. A clear first step.", 16f, Color.rgb(177, 186, 202)).apply { gravity = Gravity.CENTER })
+    // Follow the phone's own 12/24-hour setting, as every React screen does.
+    val pattern = if (android.text.format.DateFormat.is24HourFormat(this)) "HH:mm" else "h:mm a"
+    val time = java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(java.util.Date())
+    root.addView(label(time, 58f, colorText).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+    root.addView(label(alarm.optString("title", "It’s time to wake up."), 24f, colorText).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(8)) })
+    root.addView(label("Take it one step at a time.", 16f, colorTextSecondary).apply { gravity = Gravity.CENTER })
     root.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0, 1f) })
-    root.addView(button("Wake Up", true) { beginChallenge() })
-    if (alarm.optInt("snoozeCount", 0) < 1) root.addView(button("Sleep 5 More Minutes", false) { AlarmScheduler.snooze(this, alarm.getString("alarmId"), 5); finish() })
-    else root.addView(label("Snooze was already used. Complete the challenge to stop this alarm.", 13f, Color.rgb(240, 172, 111)).apply { gravity = Gravity.CENTER; setPadding(0, dp(18), 0, 0) })
+    root.addView(button("I’m awake", true) { beginChallenge() })
+    if (alarm.optInt("snoozeCount", 0) < 1) root.addView(button("Snooze 5 minutes", false) { AlarmScheduler.snooze(this, alarm.getString("alarmId"), 5); finish() })
+    else root.addView(label("You’ve already snoozed once. Finish the challenge to stop this alarm.", 16f, colorTextSecondary).apply { gravity = Gravity.CENTER; setPadding(0, dp(18), 0, 0) })
   }
 
   private fun beginChallenge() {
@@ -85,20 +101,20 @@ class ZoZarAlarmActivity : Activity() {
 
   private fun showStep(difficulty: String) {
     base()
-    root.addView(label("$difficulty challenge", 15f, Color.rgb(240, 172, 111)).apply { letterSpacing = .08f })
-    root.addView(label("Step ${step + 1} of ${prompts.size}", 13f, Color.rgb(177, 186, 202)).apply { setPadding(0, dp(10), 0, dp(28)) })
-    root.addView(label(prompts[step], if (difficulty == "Hard") 19f else 34f, Color.rgb(246, 244, 239)).apply { gravity = Gravity.CENTER })
+    root.addView(label("$difficulty challenge", 16f, colorText).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+    root.addView(label("Step ${step + 1} of ${prompts.size}", 14f, colorTextSecondary).apply { setPadding(0, dp(8), 0, dp(28)) })
+    root.addView(label(prompts[step], if (difficulty == "Hard") 19f else 34f, colorText).apply { gravity = Gravity.CENTER })
     input = EditText(this).apply {
-      setTextColor(Color.rgb(246, 244, 239)); setHintTextColor(Color.rgb(121, 132, 151)); hint = if (difficulty == "Hard") "Type the passage" else "Your answer"
-      setBackgroundColor(Color.rgb(19, 28, 42)); setPadding(dp(16), dp(14), dp(16), dp(14)); textSize = 17f
+      setTextColor(colorText); setHintTextColor(colorSubtle); hint = if (difficulty == "Hard") "Type the passage" else "Your answer"
+      background = rounded(colorSurface, 12); setPadding(dp(16), dp(14), dp(16), dp(14)); textSize = 17f
       if (difficulty != "Hard") inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
       gravity = Gravity.TOP; minHeight = if (difficulty == "Hard") dp(150) else dp(58)
     }
     root.addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(28) })
-    val error = label("", 13f, Color.rgb(255, 117, 117)).apply { visibility = View.INVISIBLE; setPadding(0, dp(10), 0, 0) }
+    val error = label("", 14f, colorError).apply { visibility = View.INVISIBLE; setPadding(0, dp(10), 0, 0) }
     root.addView(error)
     root.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0, 1f) })
-    root.addView(button(if (step == prompts.lastIndex) "Complete Wake" else "Continue", true) {
+    root.addView(button(if (step == prompts.lastIndex) "I’m awake" else "Continue", true) {
       if (input?.text?.toString()?.trim() != answers[step]) { error.text = "That answer isn’t right yet. Try again."; error.visibility = View.VISIBLE; return@button }
       if (step < prompts.lastIndex) { step += 1; showStep(difficulty) } else complete()
     })
@@ -114,11 +130,23 @@ class ZoZarAlarmActivity : Activity() {
     finish()
   }
 
+  private fun rounded(color: Int, radiusDp: Int): GradientDrawable {
+    val shape = GradientDrawable()
+    shape.setCornerRadius(dp(radiusDp).toFloat())
+    shape.setColor(color)
+    return shape
+  }
+
   private fun label(text: String, size: Float, color: Int) = TextView(this).apply { this.text = text; textSize = size; setTextColor(color); setLineSpacing(0f, 1.12f) }
   private fun button(text: String, primary: Boolean, action: () -> Unit) = Button(this).apply {
-    this.text = text; isAllCaps = false; textSize = 17f; minHeight = dp(58)
-    setTextColor(if (primary) Color.WHITE else Color.rgb(219, 224, 235)); setBackgroundColor(if (primary) Color.rgb(53, 109, 255) else Color.rgb(19, 28, 42)); setOnClickListener { action() }
-    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(62)).apply { topMargin = dp(12) }
+    this.text = text; isAllCaps = false; textSize = 17f; minHeight = dp(62); minimumHeight = dp(62)
+    setTextColor(if (primary) colorOnFill else colorText)
+    val pressed = if (primary) Color.argb(48, 41, 35, 25) else Color.argb(36, 243, 237, 223)
+    background = RippleDrawable(ColorStateList.valueOf(pressed), rounded(if (primary) colorFill else colorSurface, 16), null)
+    stateListAnimator = null
+    setPadding(dp(20), dp(12), dp(20), dp(12))
+    setOnClickListener { action() }
+    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) }
   }
   private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 }
