@@ -1,4 +1,5 @@
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 import type { VoiceNoteArtifact } from '@/services/voice-recorder-service';
 import type { PushTokenRegistration } from '@/services/push-token-service';
@@ -274,6 +275,160 @@ function localPlanFromInput(input: RepositoryWakePlanInput, id: string): Reposit
   };
 }
 
+/**
+ * How long a local session survives without the app being used.
+ *
+ * Mirrors the server's REFRESH_TOKEN_TTL_DAYS (server/src/auth/tokens.ts): the window slides
+ * forward every time the app is opened, brought to the foreground, or changes anything, so
+ * a person who uses the app at least once every 60 days is never signed out.
+ */
+export const LOCAL_SESSION_INACTIVITY_DAYS = 60;
+const LOCAL_SESSION_INACTIVITY_MS = LOCAL_SESSION_INACTIVITY_DAYS * 24 * 60 * 60 * 1000;
+
+const LOCAL_STATE_VERSION = 1;
+const LOCAL_STATE_FILE = 'zo-zar-local-state.json';
+const LOCAL_STATE_TEMP_FILE = 'zo-zar-local-state.json.tmp';
+const LOCAL_STATE_WEB_KEY = 'zo-zar.local-state';
+const LOCAL_USER_ID = 'local-user';
+
+type LocalAccountData = {
+  displayName?: string;
+  profilePhotoUri?: string;
+  commitments: RepositoryCommitment[];
+  wakePlans: RepositoryWakePlan[];
+  wakeOccurrences: RepositoryWakeOccurrence[];
+  members: RepositoryCircleMember[];
+  messages: RepositoryChatMessage[];
+  chatRetention: ChatRetention;
+};
+
+/**
+ * The whole local fallback as one JSON document.
+ *
+ * Data is kept per local account (keyed by the normalised email) and survives both
+ * sign-out and the 60-day inactivity expiry: only `session` is cleared, so signing back in
+ * with the same email restores that person's alarms, commitments, people and messages, and
+ * a different email on the same device starts with an empty account instead of seeing them.
+ */
+type LocalPersistedState = {
+  version: typeof LOCAL_STATE_VERSION;
+  session: { userId: string; email?: string } | null;
+  accountKey: string | null;
+  lastActiveAt: number | null;
+  accounts: Record<string, LocalAccountData>;
+};
+
+type WebStorage = { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void };
+
+function webStorage(): WebStorage | null {
+  try {
+    return (globalThis as { localStorage?: WebStorage }).localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function emptyAccount(): LocalAccountData {
+  return { commitments: [], wakePlans: [], wakeOccurrences: [], members: [], messages: [], chatRetention: '30d' };
+}
+
+function emptyState(): LocalPersistedState {
+  return { version: LOCAL_STATE_VERSION, session: null, accountKey: null, lastActiveAt: null, accounts: {} };
+}
+
+function accountKeyFor(email: string | undefined) {
+  return email?.trim().toLowerCase() || 'local';
+}
+
+function arrayOr<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function sanitizeAccount(value: unknown): LocalAccountData {
+  const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  return {
+    displayName: typeof raw.displayName === 'string' ? raw.displayName : undefined,
+    profilePhotoUri: typeof raw.profilePhotoUri === 'string' ? raw.profilePhotoUri : undefined,
+    commitments: arrayOr(raw.commitments),
+    wakePlans: arrayOr(raw.wakePlans),
+    wakeOccurrences: arrayOr(raw.wakeOccurrences),
+    members: arrayOr(raw.members),
+    messages: arrayOr(raw.messages),
+    chatRetention: raw.chatRetention === '7d' ? '7d' : '30d',
+  };
+}
+
+/** Parses a stored document, or returns null when it is missing, unreadable or from an unknown version. */
+function parseState(text: string | null | undefined): LocalPersistedState | null {
+  if (!text) return null;
+  try {
+    const raw = JSON.parse(text) as Record<string, unknown>;
+    if (!raw || typeof raw !== 'object' || raw.version !== LOCAL_STATE_VERSION) return null;
+    const accounts: Record<string, LocalAccountData> = {};
+    if (raw.accounts && typeof raw.accounts === 'object') {
+      for (const [key, value] of Object.entries(raw.accounts as Record<string, unknown>)) accounts[key] = sanitizeAccount(value);
+    }
+    const session = raw.session && typeof raw.session === 'object' ? raw.session as Record<string, unknown> : null;
+    return {
+      version: LOCAL_STATE_VERSION,
+      session: session ? { userId: typeof session.userId === 'string' ? session.userId : LOCAL_USER_ID, email: typeof session.email === 'string' ? session.email : undefined } : null,
+      accountKey: typeof raw.accountKey === 'string' ? raw.accountKey : null,
+      lastActiveAt: typeof raw.lastActiveAt === 'number' && Number.isFinite(raw.lastActiveAt) ? raw.lastActiveAt : null,
+      accounts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function readNativeFile(name: string) {
+  try {
+    const file = new File(Paths.document, name);
+    return file.exists ? await file.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadPersistedState(): Promise<LocalPersistedState> {
+  if (Platform.OS === 'web') {
+    try {
+      return parseState(webStorage()?.getItem(LOCAL_STATE_WEB_KEY)) ?? emptyState();
+    } catch {
+      return emptyState();
+    }
+  }
+  // The temp file only matters if a crash landed between writing it and moving it over
+  // the real one; it is then the newest complete copy.
+  return parseState(await readNativeFile(LOCAL_STATE_FILE))
+    ?? parseState(await readNativeFile(LOCAL_STATE_TEMP_FILE))
+    ?? emptyState();
+}
+
+/**
+ * Writes the document synchronously, so two mutations can never interleave on the JS thread
+ * and a method's promise only resolves once its change is on disk. On native the JSON goes
+ * to a temp file first and is then moved over the real one, so a crash mid-write leaves the
+ * previous complete document (or the complete temp file) rather than a truncated one.
+ */
+function savePersistedState(state: LocalPersistedState) {
+  const json = JSON.stringify(state);
+  try {
+    if (Platform.OS === 'web') {
+      webStorage()?.setItem(LOCAL_STATE_WEB_KEY, json);
+      return;
+    }
+    const temp = new File(Paths.document, LOCAL_STATE_TEMP_FILE);
+    if (!temp.exists) temp.create();
+    temp.write(json);
+    temp.moveSync(new File(Paths.document, LOCAL_STATE_FILE), { overwrite: true });
+  } catch (caught) {
+    // The change is still applied in memory for this run; failing the user's action
+    // because the disk refused would be worse than losing it on the next restart.
+    console.warn('ZO-ZAR could not save local data.', caught);
+  }
+}
+
 function localRepository(): ZOZARRepository {
   let commitments: RepositoryCommitment[] = [];
   let wakePlans: RepositoryWakePlan[] = [];
@@ -281,6 +436,81 @@ function localRepository(): ZOZARRepository {
   let members: RepositoryCircleMember[] = [];
   let messages: RepositoryChatMessage[] = [];
   let chatRetention: ChatRetention = '30d';
+  let displayName: string | undefined;
+  let profilePhotoUri: string | undefined;
+
+  let persisted: LocalPersistedState = emptyState();
+
+  function loadAccount(data: LocalAccountData) {
+    commitments = data.commitments;
+    wakePlans = data.wakePlans;
+    wakeOccurrences = data.wakeOccurrences;
+    members = data.members;
+    messages = data.messages;
+    chatRetention = data.chatRetention;
+    displayName = data.displayName;
+    profilePhotoUri = data.profilePhotoUri;
+  }
+
+  function currentAccount(): LocalAccountData {
+    return { displayName, profilePhotoUri, commitments, wakePlans, wakeOccurrences, members, messages, chatRetention };
+  }
+
+  /** Folds the in-memory account back into the document and writes it. */
+  function persist() {
+    if (persisted.accountKey) persisted = { ...persisted, accounts: { ...persisted.accounts, [persisted.accountKey]: currentAccount() } };
+    savePersistedState(persisted);
+  }
+
+  /** Records activity and saves. Called after every successful write. */
+  function commit() {
+    if (!persisted.session) return;
+    persisted = { ...persisted, lastActiveAt: Date.now() };
+    persist();
+  }
+
+  function isExpired(lastActiveAt: number | null, now: number) {
+    // A missing timestamp cannot prove recent use. A timestamp in the future means the
+    // clock moved backwards; that is not inactivity, so it is treated as current.
+    if (lastActiveAt === null) return true;
+    return now - lastActiveAt >= LOCAL_SESSION_INACTIVITY_MS;
+  }
+
+  function startSession(email: string, name?: string) {
+    if (persisted.accountKey) persist();
+    const key = accountKeyFor(email);
+    loadAccount(persisted.accounts[key] ?? emptyAccount());
+    if (name?.trim()) displayName = name.trim();
+    persisted = { ...persisted, session: { userId: LOCAL_USER_ID, email }, accountKey: key, lastActiveAt: Date.now() };
+    persist();
+    return sessionResult();
+  }
+
+  /** Ends the session but keeps the account's data in the document for the next sign-in. */
+  function endSession() {
+    if (persisted.accountKey) persist();
+    loadAccount(emptyAccount());
+    persisted = { ...persisted, session: null, accountKey: null };
+    savePersistedState(persisted);
+  }
+
+  function sessionResult(): RepositorySession {
+    const session = persisted.session ?? { userId: LOCAL_USER_ID };
+    return { ...session, ...(displayName ? { displayName } : {}), ...(profilePhotoUri ? { profilePhotoUri } : {}) };
+  }
+
+  const ready: Promise<void> = loadPersistedState().then((state) => {
+    persisted = state;
+    if (state.session) {
+      const key = state.accountKey ?? accountKeyFor(state.session.email);
+      persisted = { ...persisted, accountKey: key };
+      loadAccount(state.accounts[key] ?? emptyAccount());
+    } else {
+      persisted = { ...persisted, accountKey: null };
+    }
+  }).catch(() => {
+    persisted = emptyState();
+  });
 
   function withOccurrence(plan?: RepositoryWakePlan | null) {
     if (!plan) return null;
@@ -320,6 +550,9 @@ function localRepository(): ZOZARRepository {
       ...(input.weekdays === undefined ? {} : { weekdays: input.weekdays }),
       ...(input.graceMinutes === undefined ? {} : { graceMinutes: input.graceMinutes }),
     };
+    // Compute the next occurrence before touching state, so an unschedulable plan (a
+    // one-time alarm in the past) leaves both lists exactly as they were.
+    if (next.status === 'Active') nextOccurrenceForValues(next.scheduleType, next.scheduledDate, next.time, next.weekdays);
     wakePlans = wakePlans.map((item) => item.id === id ? next : item);
     if (next.status === 'Active') return scheduleLocalOccurrence(next);
     wakeOccurrences = wakeOccurrences.map((item) => item.wakePlanId === id && ['scheduled', 'ringing'].includes(item.status) ? { ...item, status: 'cancelled' } : item);
@@ -333,64 +566,91 @@ function localRepository(): ZOZARRepository {
     return withOccurrence(next) as RepositoryWakePlan;
   }
 
+  /** Waits for hydration before reading. */
+  function read<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => Promise<R> {
+    return async (...args) => { await ready; return fn(...args); };
+  }
+
+  /** Waits for hydration, applies the change, then records activity and saves it. */
+  function write<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => Promise<R> {
+    return async (...args) => {
+      await ready;
+      const result = fn(...args);
+      commit();
+      return result;
+    };
+  }
+
   return {
     mode: 'LOCAL_FALLBACK',
-    signUp: async (_name, email) => ({ session: { userId: 'local-user', email }, requiresEmailConfirmation: false }),
-    signIn: async (email) => ({ userId: 'local-user', email }),
-    restoreSession: async () => null,
-    signOut: async () => undefined,
-    updateProfilePhoto: async (uri) => uri,
-    listCommitments: async () => commitments,
-    createCommitment: async (title, time) => {
+    signUp: read((name: string, email: string) => ({ session: startSession(email, name), requiresEmailConfirmation: false })),
+    signIn: read((email: string) => startSession(email)),
+    restoreSession: read(() => {
+      if (!persisted.session) return null;
+      const now = Date.now();
+      if (isExpired(persisted.lastActiveAt, now)) {
+        // Inactive for 60 days: the session ends, the account's data stays on the device.
+        endSession();
+        return null;
+      }
+      // Opening the app is activity, so restoring slides the window forward.
+      persisted = { ...persisted, lastActiveAt: now };
+      persist();
+      return sessionResult();
+    }),
+    signOut: read(() => { endSession(); }),
+    updateProfilePhoto: write((uri: string) => { profilePhotoUri = uri; return uri; }),
+    listCommitments: read(() => commitments),
+    createCommitment: write((title: string, time: string) => {
       const startsAt = commitmentDate(time).toISOString();
       if (new Date(startsAt).getTime() <= Date.now()) throw new Error('Choose a future date and time for this commitment.');
       const item = { id: `local-${Date.now()}`, title, detail: '', dateLabel: new Date(startsAt).toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt), startsAt, done: false };
       commitments = [...commitments, item];
       return item;
-    },
-    updateCommitment: async (id, title, startsAt) => {
+    }),
+    updateCommitment: write((id: string, title: string, startsAt: string) => {
       const current = commitments.find((item) => item.id === id);
       if (!current) throw new Error('Commitment was not found.');
       if (new Date(startsAt).getTime() <= Date.now()) throw new Error('Choose a future date and time for this commitment.');
       const next = { ...current, title: title.trim(), startsAt, dateLabel: new Date(startsAt).toLocaleDateString([], { weekday: 'long' }), time: displayTime(startsAt) };
       commitments = commitments.map((item) => item.id === id ? next : item);
       return next;
-    },
-    deleteCommitment: async (id) => { commitments = commitments.filter((item) => item.id !== id); },
-    setCommitmentComplete: async (id, complete) => { commitments = commitments.map((item) => item.id === id ? { ...item, done: complete } : item); },
-    getWakePlan: async () => withOccurrence(wakePlans[0]),
-    listWakePlans: async () => wakePlans.map((plan) => withOccurrence(plan) as RepositoryWakePlan),
-    createWakePlan: async (input) => createLocalPlan(input),
-    updateWakePlan: async (id, input) => updateLocalPlan(id, input),
-    deleteWakePlan: async (id) => {
+    }),
+    deleteCommitment: write((id: string) => { commitments = commitments.filter((item) => item.id !== id); }),
+    setCommitmentComplete: write((id: string, complete: boolean) => { commitments = commitments.map((item) => item.id === id ? { ...item, done: complete } : item); }),
+    getWakePlan: read(() => withOccurrence(wakePlans[0])),
+    listWakePlans: read(() => wakePlans.map((plan) => withOccurrence(plan) as RepositoryWakePlan)),
+    createWakePlan: write((input: RepositoryWakePlanInput) => createLocalPlan(input)),
+    updateWakePlan: write((id: string, input: Partial<RepositoryWakePlanInput>) => updateLocalPlan(id, input)),
+    deleteWakePlan: write((id: string) => {
       if (!wakePlans.some((item) => item.id === id)) throw new Error('Wake plan was not found.');
       wakePlans = wakePlans.filter((item) => item.id !== id);
       wakeOccurrences = wakeOccurrences.filter((item) => item.wakePlanId !== id);
-    },
-    listWakeOccurrences: async (wakePlanId) => wakeOccurrences.filter((item) => !wakePlanId || item.wakePlanId === wakePlanId),
-    getWakeOccurrence: async (occurrenceId) => wakeOccurrences.find((item) => item.id === occurrenceId) ?? null,
-    setWakePlanActive: async (id, active) => updateLocalPlan(id, { active }),
-    setWakeDifficulty: async (id, difficulty) => { updateLocalPlan(id, { difficulty }); },
-    saveWakePlan: async (input) => input.id ? updateLocalPlan(input.id, input) : createLocalPlan(input),
-    confirmWake: async (occurrenceId) => { if (!wakeOccurrences.some((item) => item.id === occurrenceId)) throw new Error('No active wake occurrence is available to confirm.'); wakeOccurrences = wakeOccurrences.map((item) => item.id === occurrenceId ? { ...item, status: 'confirmed' } : item); },
+    }),
+    listWakeOccurrences: read((wakePlanId?: string) => wakeOccurrences.filter((item) => !wakePlanId || item.wakePlanId === wakePlanId)),
+    getWakeOccurrence: read((occurrenceId: string) => wakeOccurrences.find((item) => item.id === occurrenceId) ?? null),
+    setWakePlanActive: write((id: string, active: boolean) => updateLocalPlan(id, { active })),
+    setWakeDifficulty: write((id: string, difficulty: UiDifficulty) => { updateLocalPlan(id, { difficulty }); }),
+    saveWakePlan: write((input: RepositoryWakePlanInput) => input.id ? updateLocalPlan(input.id, input) : createLocalPlan(input)),
+    confirmWake: write((occurrenceId: string) => { if (!wakeOccurrences.some((item) => item.id === occurrenceId)) throw new Error('No active wake occurrence is available to confirm.'); wakeOccurrences = wakeOccurrences.map((item) => item.id === occurrenceId ? { ...item, status: 'confirmed' } : item); }),
     recordWakeSnooze: async () => undefined,
-    listCircleMembers: async () => members,
-    inviteCircleMember: async (email) => { const name = email.split('@')[0]; members = [...members, { id: `local-member-${Date.now()}`, name, initials: initials(name), detail: 'Invited, waiting for them', status: 'Pending', relationship: 'outgoing' }]; },
-    respondToCircleInvitation: async (id, accept) => {
+    listCircleMembers: read(() => members),
+    inviteCircleMember: write((email: string) => { const name = email.split('@')[0]; members = [...members, { id: `local-member-${Date.now()}`, name, initials: initials(name), detail: 'Invited, waiting for them', status: 'Pending', relationship: 'outgoing' }]; }),
+    respondToCircleInvitation: write((id: string, accept: boolean) => {
       if (!members.some((member) => member.id === id)) throw new Error('Invitation was not found.');
       members = accept
         ? members.map((member) => member.id === id ? { ...member, status: 'Accepted', detail: 'Accepted' } : member)
         : members.filter((member) => member.id !== id);
-    },
-    removeCircleMember: async (id) => { members = members.filter((member) => member.id !== id); },
-    listMessages: async () => messages,
-    getChatRetention: async () => chatRetention,
-    setChatRetention: async (_threadId, retention) => {
+    }),
+    removeCircleMember: write((id: string) => { members = members.filter((member) => member.id !== id); }),
+    listMessages: read(() => messages),
+    getChatRetention: read(() => chatRetention),
+    setChatRetention: write((_threadId: string, retention: ChatRetention) => {
       chatRetention = retention;
       messages = [...messages, { id: `local-system-${Date.now()}`, body: `Messages now disappear after ${retention === '7d' ? '1 week' : '1 month'}.`, timestamp: 'Now', author: 'me', kind: 'system' }];
-    },
+    }),
     subscribeMessages: async () => () => undefined,
-    sendMessage: async (_threadId, body) => { const message = { id: `local-message-${Date.now()}`, body, timestamp: 'Now', author: 'me' as const }; messages = [...messages, message]; return message; },
+    sendMessage: write((_threadId: string, body: string) => { const message = { id: `local-message-${Date.now()}`, body, timestamp: 'Now', author: 'me' as const }; messages = [...messages, message]; return message; }),
     sendVoiceNote: async () => undefined,
     upsertDeviceToken: async () => undefined,
   };
@@ -413,9 +673,10 @@ export function isServerBacked(mode: RepositoryMode): boolean {
  * Builds the repository the app runs against.
  *
  * The REST implementation is used whenever the API is configured. The local fallback is
- * not a second backend: it holds everything in memory for one session so the UI can be
- * developed and demonstrated without a server, and it is what runs when
- * EXPO_PUBLIC_API_URL is unset. Nothing it stores survives a reload.
+ * not a second backend: it keeps everything on this device so the app works without a
+ * server, and it is what runs when EXPO_PUBLIC_API_URL is unset. Its state is saved as one
+ * JSON document (expo-file-system on Android, localStorage on web) and restored on launch;
+ * the session ends only after LOCAL_SESSION_INACTIVITY_DAYS without use, or on sign-out.
  */
 export function createZOZARRepository(): ZOZARRepository {
   return isApiConfigured() ? createRestRepository() : localRepository();
