@@ -139,7 +139,14 @@ turns every deploy into an approval gate, which is worth having once this is ser
 anyone other than you. Restrict it to the `main` branch so the environment claim cannot
 be obtained from a side branch.
 
-## 5. Deploying
+## 5. Turning deploys on
+
+The deploy job is switched off by default, so merging to `main` before AWS exists runs
+the tests and stops there instead of failing. Once sections 1–4 are done, add a repository
+**variable** (not a secret) named `AWS_DEPLOY_ENABLED` with the value `true`, under
+Settings > Secrets and variables > Actions > Variables.
+
+## 6. Deploying
 
 Push to `main`. The workflow runs typecheck, the full test suite and the migrations
 against a throwaway Postgres, then applies migrations to Aiven and deploys the stack.

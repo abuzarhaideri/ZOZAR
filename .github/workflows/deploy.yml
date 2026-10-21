@@ -55,6 +55,14 @@ jobs:
   deploy:
     name: Deploy to AWS
     needs: verify
+    # Off until AWS is set up. Without this, every merge to main would try to assume a
+    # role that does not exist yet and leave a red failure on the default branch. The
+    # verify job above still runs on every push, so main is always tested.
+    #
+    # To turn deploys on once docs/DEPLOYMENT.md is done: GitHub repository Settings >
+    # Secrets and variables > Actions > Variables > New variable,
+    # name AWS_DEPLOY_ENABLED, value true.
+    if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
