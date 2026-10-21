@@ -44,7 +44,7 @@ export default function SignInScreen() {
         <Text accessibilityRole="header" style={local.title}>
           Welcome back.
         </Text>
-        <Text style={local.lede}>Sign in to see tonight's alarm and the people behind it.</Text>
+        <Text style={local.lede}>Sign in to see your next alarm and the people behind it.</Text>
       </View>
 
       <TextField

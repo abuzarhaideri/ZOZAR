@@ -250,6 +250,21 @@ export function ZOZARStoreProvider({ children }: PropsWithChildren) {
     return () => subscription.remove();
   }, [repository, session]);
   useEffect(() => {
+    // The local fallback keeps its session on the device for 60 days of inactivity.
+    // Coming back to the foreground both counts as activity and re-checks that window,
+    // so an app left in the background past it signs out instead of running on. The REST
+    // repository is excluded: its restore refreshes tokens over the network.
+    if (!session || isServerBacked(repository.mode)) return undefined;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      void repository.restoreSession().then((next) => {
+        if (next) return;
+        setSession(null); setCommitments([]); setWakePlans([]); setWakeOccurrences([]); setDeviceSchedule({}); setMembers([]); setMessages([]); setHydrationError(null);
+      }).catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [repository, session]);
+  useEffect(() => {
     void hasCompletedPermissionSetup()
       .then((complete) => setPermissionsSetupComplete(complete))
       .finally(() => setSetupHydrated(true));

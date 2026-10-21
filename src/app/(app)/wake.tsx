@@ -43,7 +43,7 @@ function deviceStatusLabel(plan: WakePlan, status?: { status: 'scheduled' | 'not
  * The alarm list and its editor.
  *
  * Optional route param `edit`: `/wake?edit=<planId>` opens that alarm's editor directly
- * (so Tonight's dial can go straight to the alarm it shows), and `/wake?edit=new` opens a
+ * (so the Wake dial can go straight to the alarm it shows), and `/wake?edit=new` opens a
  * new one when there is room. Without the param the screen behaves as a plain list.
  */
 export default function WakeRoute() {
@@ -237,8 +237,8 @@ export default function WakeRoute() {
 
   return (
     <Screen>
-      {/* Reached from Tonight, not a tab, so it carries its own way back. */}
-      <BackButton label="Tonight" />
+      {/* Reached from Wake, not a tab, so it carries its own way back. */}
+      <BackButton label="Wake" />
 
       <View style={wake.intro}>
         <Text accessibilityRole="header" style={wake.title}>
@@ -362,34 +362,14 @@ export default function WakeRoute() {
             />
 
             {/*
-              Practice and delete belong to an alarm that already exists, so they appear
-              only once there is one, below Save as quiet text actions.
+              Delete belongs to an alarm that already exists, so it appears only once there
+              is one, below Save as a quiet text action. Practice is not here: it lives in
+              the editor's Wake challenge section, beside each level, so it works for new
+              and unsaved alarms too and never needs an upcoming occurrence.
             */}
             {editingPlan ? (
               <View style={wake.sheetFooter}>
                 {sheetError ? notice(sheetError, () => leaveEditor(reviewPermissions)) : null}
-
-                <Touchable
-                  accessibilityRole="button"
-                  accessibilityLabel="Try the wake challenge now"
-                  accessibilityState={{ disabled: !editingPlan.occurrenceId }}
-                  disabled={!editingPlan.occurrenceId}
-                  onPress={() => {
-                    const occurrenceId = editingPlan.occurrenceId;
-                    if (!occurrenceId) return;
-                    leaveEditor(() => router.push(`/wake/${occurrenceId}?practice=1` as never));
-                  }}
-                  rippleColor={theme.surfaceStrong}
-                  style={wake.textAction}
-                >
-                  <Icon as={Icons.listChecks} size={IconSize.md} color={editingPlan.occurrenceId ? theme.text : theme.subtle} />
-                  <Text style={[wake.textActionLabel, !editingPlan.occurrenceId && wake.textActionDisabled]}>
-                    Try the challenge
-                  </Text>
-                </Touchable>
-                {!editingPlan.occurrenceId ? (
-                  <Text style={wake.footerNote}>Available once this alarm has an upcoming wake-up.</Text>
-                ) : null}
 
                 {deleteId === editingPlan.id ? (
                   <View style={wake.deleteConfirm}>
@@ -518,8 +498,6 @@ const makeWakeStyles = (theme: Theme) =>
     sheetFooter: { marginTop: Spacing.xl, gap: Spacing.xs },
     textAction: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, minHeight: MinTarget, alignSelf: 'flex-start' },
     textActionLabel: { ...Type.action, color: theme.text },
-    textActionDisabled: { color: theme.subtle },
-    footerNote: { ...Type.caption, color: theme.subtle, marginBottom: Spacing.sm },
     deleteConfirm: { gap: Spacing.sm, paddingTop: Spacing.sm },
     deleteQuestion: { ...Type.callout, color: theme.text },
     deleteRow: { flexDirection: 'row', gap: Spacing.xl },

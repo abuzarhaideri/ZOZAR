@@ -29,7 +29,8 @@ import {
 } from '@/lib/time';
 
 /**
- * Tonight, in the Hearth direction.
+ * Wake: the home tab, in the Hearth direction. Named for what it is always about — your
+ * next wake-up — rather than "Tonight", which was wrong whenever it was opened by day.
  *
  * A bedside companion rather than a timeline: the date, one honest line about where the
  * night stands, the clock as the anchor, and below it the few things that belong to this
@@ -87,7 +88,7 @@ function commitmentWhen(item: Commitment, now: Date) {
   return `Tomorrow, ${time}`;
 }
 
-export default function TonightRoute() {
+export default function WakeHomeRoute() {
   const { theme } = useZOZARTheme();
   const local = useMemo(() => makeStyles(theme), [theme]);
   const {
@@ -157,12 +158,12 @@ export default function TonightRoute() {
     const endOfTomorrow = new Date(start);
     endOfTomorrow.setDate(start.getDate() + 2);
     const end = endOfTomorrow.getTime();
-    const tonight = commitments
+    const upcoming = commitments
       .map((item) => ({ item, at: validDate(item.startsAt)?.getTime() ?? null }))
       .filter(({ at }) => at !== null && at >= start.getTime() && at < end)
       .sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
       .map(({ item }) => item);
-    return { shown: tonight.slice(0, COMMITMENT_LIMIT), remaining: Math.max(0, tonight.length - COMMITMENT_LIMIT) };
+    return { shown: upcoming.slice(0, COMMITMENT_LIMIT), remaining: Math.max(0, upcoming.length - COMMITMENT_LIMIT) };
   }, [commitments, now]);
 
   /**
