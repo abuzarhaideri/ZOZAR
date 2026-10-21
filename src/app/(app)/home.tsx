@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { HearthDial } from '@/components/hearth-dial';
-import { Touchable, announce } from '@/components/motion';
+import { Touchable, announce, webActiveThumb } from '@/components/motion';
 import { useZOZARStore, type Commitment, type WakePlan } from '@/components/zo-zar-store';
 import {
   BrandBar,
@@ -295,6 +295,8 @@ export default function WakeHomeRoute() {
               onValueChange={() => void toggle()}
               trackColor={{ false: theme.lineStrong, true: theme.fill }}
               thumbColor={theme.surface}
+              // React Native Web ignores thumbColor for the "on" state and draws its own teal.
+              {...webActiveThumb(theme.surface)}
             />
           </View>
         </View>

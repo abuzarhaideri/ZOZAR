@@ -68,3 +68,10 @@ design/
 
 # The user's design review bundle: reference only, not shipped.
 design-exports/
+
+# iCloud/Finder conflict copies ("file 2.ts"). They are byte-identical duplicates and
+# once slipped into a commit via `git add -A`.
+* 2.ts
+* 2.tsx
+* 2.json
+* 2.kt

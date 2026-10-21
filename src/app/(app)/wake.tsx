@@ -11,7 +11,7 @@ import {
   type AlarmEditorValue,
 } from '@/components/alarm-editor';
 import { BackButton, Icon, Icons, PrimaryButton, Screen, SecondaryButton, useZOZARTheme } from '@/components/zo-zar-ui';
-import { Touchable, announce } from '@/components/motion';
+import { Touchable, announce, webActiveThumb } from '@/components/motion';
 import { IconSize, MinTarget, Radius, Spacing, Type, type Theme } from '@/constants/theme';
 import { isProtected } from '@/components/zo-zar-repository';
 import { useZOZARStore, type WakePlan } from '@/components/zo-zar-store';
@@ -305,6 +305,8 @@ export default function WakeRoute() {
                 onValueChange={() => void runForPlan(plan.id, () => toggleWakePlan(plan.id))}
                 trackColor={{ false: theme.lineStrong, true: theme.fill }}
                 thumbColor={live ? theme.onFill : theme.surfaceStrong}
+                // React Native Web ignores thumbColor for the "on" state and draws its own teal.
+                {...webActiveThumb(theme.onFill)}
               />
             </View>
           );
