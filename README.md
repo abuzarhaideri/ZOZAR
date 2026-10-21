@@ -187,4 +187,5 @@ root, and hoisted server dependencies would leak into the app's bundle.
 
 ## Licence
 
-See [LICENSE](LICENSE).
+Copyright © 2026 Abuzar Haideri. All rights reserved. The source is public to read;
+reusing it requires permission. See [LICENSE](LICENSE).

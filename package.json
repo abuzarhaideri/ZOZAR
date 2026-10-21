@@ -60,5 +60,6 @@
     "verify:contrast": "node ./scripts/verify-contrast.mjs",
     "audit:appwrite": "node ./scripts/audit-appwrite.mjs"
   },
-  "private": true
+  "private": true,
+  "license": "UNLICENSED"
 }
