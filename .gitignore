@@ -41,6 +41,11 @@ yarn-error.*
 # server credentials
 **/*service-account*.json
 **/*firebase-adminsdk*.json
+# A real service-account key was committed once as firebase-key.json, which matched
+# neither pattern above. Match on what the file IS, not what it happens to be named.
+firebase-key.json
+**/*firebase*key*.json
+**/*-key.json
 
 # generated release artifacts
 *.apk
