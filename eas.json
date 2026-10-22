@@ -7,7 +7,9 @@
       "environment": "preview",
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_ANDROID_PACKAGE": "com.zozar.app"
+        "EXPO_PUBLIC_ANDROID_PACKAGE": "com.zozar.app",
+        "EXPO_PUBLIC_API_URL": "https://t2zvn0dnv9.execute-api.us-east-1.amazonaws.com",
+        "EXPO_PUBLIC_WS_URL": "wss://8av918mtjl.execute-api.us-east-1.amazonaws.com/prod"
       },
       "android": {
         "buildType": "apk"
