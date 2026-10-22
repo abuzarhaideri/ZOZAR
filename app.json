@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.zozar.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
