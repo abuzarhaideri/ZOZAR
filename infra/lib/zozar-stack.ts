@@ -42,6 +42,17 @@ export type ZozarStackProps = StackProps & {
    * `/zozar/prod`. Created outside this stack: CloudFormation cannot write a SecureString,
    * and putting secrets in a template would record them in the deployment history. */
   parameterPrefix: string;
+
+  /**
+   * When set (Learner Lab), all functions run as this pre-existing role because the lab
+   * forbids creating roles.
+   *
+   * An AWS Academy Learner Lab denies `iam:CreateRole`, so the three execution roles this
+   * stack would normally declare cannot be created. The lab instead provides `LabRole`,
+   * which already carries the permissions the functions need. Leave this unset outside the
+   * lab and every function gets its own least-privilege role, exactly as before.
+   */
+  lambdaRoleArn?: string;
 };
 
 export class ZozarStack extends Stack {
@@ -49,6 +60,28 @@ export class ZozarStack extends Stack {
     super(scope, id, props);
 
     const serverRoot = join(__dirname, '..', '..', 'server');
+
+    /**
+     * Learner Lab only: the single pre-existing execution role for all three functions.
+     *
+     * `mutable: false` tells CDK never to attach a policy to it: the lab blocks IAM
+     * writes, so attaching one would fail at deploy time.
+     * `addGrantsToResources: true` makes each grant that *can* be expressed on the other
+     * side of the relationship land in that resource's own policy instead of being
+     * silently discarded; see the comment on `readSecrets` below for the grants that have
+     * no such other side.
+     *
+     * One consequence to be clear about: all three functions share this role, so the
+     * per-function split below — the API reads and writes media, the worker only reads
+     * and deletes — collapses into its union for the duration of a lab deployment. The
+     * split stays in the code because outside the lab it is real.
+     */
+    const lambdaRole = props.lambdaRoleArn
+      ? iam.Role.fromRoleArn(this, 'LambdaRole', props.lambdaRoleArn, {
+          mutable: false,
+          addGrantsToResources: true,
+        })
+      : undefined;
 
     /** Private media bucket. Nothing is public-read; every object is reached through a
      * presigned URL issued by the API after an authorization check. */
@@ -102,6 +135,8 @@ export class ZozarStack extends Stack {
       tsconfig: join(serverRoot, 'tsconfig.json'),
       bundling,
       environment: sharedEnvironment,
+      // Outside the lab this is absent, and each NodejsFunction declares its own role.
+      ...(lambdaRole ? { role: lambdaRole } : {}),
     };
 
     /**
@@ -202,6 +237,28 @@ export class ZozarStack extends Stack {
     /**
      * Read access to exactly this deployment's parameters, by prefix, rather than to all
      * of Parameter Store.
+     *
+     * In Learner Lab mode the role is immutable, so `addToRolePolicy` is a no-op: it
+     * returns false and nothing is added to any policy. Parameter Store has no resource
+     * policy, so there is no other side of the relationship to express this on — unlike
+     * the S3 grants above, which land in the bucket policy. The same is true of
+     * `wsStage.grantManagementApiAccess`, which is principal-only and is therefore
+     * dropped entirely in lab mode.
+     *
+     * The call is kept because it is correct and necessary outside the lab. Inside the
+     * lab the functions depend instead on LabRole's own permissions: `ssm:GetParameter`
+     * for the secrets, `execute-api:ManageConnections` for the socket pushes, and writes
+     * to CloudWatch Logs, which this stack also stops granting — CDK attaches
+     * `AWSLambdaBasicExecutionRole` only to a role it creates itself, never to one handed
+     * to it as `role`.
+     *
+     * Those are runtime dependencies, not deploy-time ones: if LabRole is missing one the
+     * deploy still succeeds, and a secrets or socket failure then surfaces as an
+     * AccessDenied in the function's log group. The exception is the logs permission
+     * itself: without it the function produces no log events at all, so an empty log
+     * group is a symptom rather than proof that nothing ran. There is no workaround from
+     * inside this stack — granting the role anything would require the IAM write the lab
+     * denies.
      */
     const readSecrets = new iam.PolicyStatement({
       actions: ['ssm:GetParameter', 'ssm:GetParameters'],
