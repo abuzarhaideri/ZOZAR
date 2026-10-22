@@ -52,6 +52,34 @@ function tlsOptions(): ConnectionOptions | false {
 }
 
 /**
+ * Removes `sslmode` from the connection string.
+ *
+ * `pg` builds its effective config as `Object.assign({}, config, parse(connectionString))`
+ * — the parsed URL wins over what the caller passed. `pg-connection-string` returns
+ * `ssl: {}` for `sslmode=require`, so that empty object **replaces** the options from
+ * `tlsOptions()`, discarding Aiven's CA. TLS stays on, nothing can verify the peer, and
+ * every query dies with SELF_SIGNED_CERT_IN_CHAIN.
+ *
+ * Stripping the parameter leaves no `ssl` key in the parsed result, so the explicit
+ * options survive the merge and remain the single source of truth. This is stricter than
+ * `sslmode=require`, not looser: the connection still demands TLS and now actually
+ * verifies the certificate against the project CA.
+ *
+ * Done by splitting on the query string rather than with `new URL()`, which percent-
+ * decodes and re-encodes the password and can therefore change it.
+ */
+function withoutSslmode(url: string): string {
+  const queryAt = url.indexOf('?');
+  if (queryAt === -1) return url;
+  const base = url.slice(0, queryAt);
+  const params = url
+    .slice(queryAt + 1)
+    .split('&')
+    .filter((param) => !/^sslmode=/i.test(param));
+  return params.length > 0 ? `${base}?${params.join('&')}` : base;
+}
+
+/**
  * One connection per container, deliberately.
  *
  * Aiven's free PostgreSQL plan allows 20 connections and offers no PgBouncer, and RDS
@@ -66,7 +94,7 @@ export function getDatabase(): Database {
   if (database) return database;
 
   pool = new pg.Pool({
-    connectionString: requireEnv('DATABASE_URL'),
+    connectionString: withoutSslmode(requireEnv('DATABASE_URL')),
     ssl: tlsOptions(),
     max: 1,
     // A frozen Lambda container cannot run timers, so this only reclaims connections in
@@ -99,3 +127,6 @@ export async function closeDatabase(): Promise<void> {
 }
 
 export { schema };
+
+/** Exposed for tests only; see server/test/db-tls.test.ts. */
+export const __test = { withoutSslmode };
