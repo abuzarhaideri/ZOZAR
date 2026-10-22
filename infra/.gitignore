@@ -2,3 +2,6 @@ node_modules/
 cdk.out/
 *.js
 *.d.ts
+
+# Written by `cdk deploy --outputs-file`. Endpoint URLs, no secrets, but per-deploy noise.
+cdk-outputs.json
