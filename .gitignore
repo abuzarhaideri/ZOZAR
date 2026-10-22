@@ -38,9 +38,7 @@ yarn-error.*
 .env.*
 !.env.example
 
-# backend CLI state and server credentials
-supabase/.temp/
-supabase/.branches/
+# server credentials
 **/*service-account*.json
 **/*firebase-adminsdk*.json
 
