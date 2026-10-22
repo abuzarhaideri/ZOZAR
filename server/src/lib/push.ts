@@ -11,6 +11,16 @@ export type PushMessage = {
   title: string;
   body: string;
   data?: Record<string, string>;
+  /**
+   * Deliver as data only, with no tray notification.
+   *
+   * This is how realtime reaches the app now that there is no WebSocket: a new chat
+   * message wakes the client, which then fetches. The user must not see a second,
+   * duplicate banner for something the open conversation is about to render itself, so
+   * `notification` is omitted and `title`/`body` serve only as a fallback description
+   * for logs.
+   */
+  silent?: boolean;
 };
 
 /** Per-token outcome. `invalidToken` is distinguished from a transient failure because the
@@ -63,12 +73,19 @@ function fcmNotifier(): Notifier {
       try {
         await getMessaging(firebaseApp()).send({
           token: message.token,
-          notification: { title: message.title, body: message.body },
+          // A silent push carries no `notification` block at all. Including one with
+          // empty strings would still post an empty banner on Android.
+          ...(message.silent ? {} : { notification: { title: message.title, body: message.body } }),
           data: message.data ?? {},
           android: {
             // A missed-wake escalation is time-critical: it is useless if Doze defers it.
-            priority: 'high',
-            notification: { channelId: 'zo-zar-wake-alarms-v3-zozar', defaultSound: true },
+            // A silent realtime nudge is not, and high priority on every chat message
+            // would spend the app's standby budget and get it throttled by Android, so
+            // only the user-visible pushes ask for it.
+            priority: message.silent ? 'normal' : 'high',
+            ...(message.silent
+              ? {}
+              : { notification: { channelId: 'zo-zar-wake-alarms-v3-zozar', defaultSound: true } }),
           },
         });
         return { ok: true };

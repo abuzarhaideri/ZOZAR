@@ -7,9 +7,9 @@ import { getNotifier, type Notifier } from '@/lib/push';
 import { getStorage } from '@/lib/storage';
 
 /**
- * Scheduled work, run by EventBridge on a fixed interval.
+ * Scheduled work, run on a fixed interval by a Catalyst cron calling /internal/run-worker.
  *
- * Every task is idempotent and bounded. Idempotent because EventBridge guarantees
+ * Every task is idempotent and bounded. Idempotent because the trigger guarantees
  * at-least-once delivery and two overlapping runs must not double-escalate or
  * double-notify; bounded because this Lambda holds a scarce database connection and must
  * never run long enough to be killed mid-sweep.
@@ -427,7 +427,7 @@ export async function sweepStaleRows(database: Database = getDatabase()): Promis
 }
 
 /** Runs every task, reporting each independently so one failure does not hide the others'
- * results in CloudWatch. */
+ * results in the Catalyst logs. */
 export async function runAllTasks(): Promise<Record<string, TaskReport | { error: string }>> {
   const tasks = {
     materialiseOccurrences,

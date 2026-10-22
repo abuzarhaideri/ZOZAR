@@ -303,7 +303,7 @@ export const deviceTokens = pgTable(
 );
 
 /** Outbox for FCM. Writing the job in the same transaction as the state change it reports
- * means a push is never lost to a Lambda timeout, and `dedupe_key` makes retries safe. */
+ * means a push is never lost to a worker timeout, and `dedupe_key` makes retries safe. */
 export const notificationJobs = pgTable(
   'notification_jobs',
   {

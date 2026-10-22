@@ -4,30 +4,13 @@ import { eq, sql } from 'drizzle-orm';
 import { createApp } from '@/app';
 import { closeDatabase, getDatabase, schema } from '@/db/client';
 import { resetSigningKeyCache, signAccessToken } from '@/auth/tokens';
-import { handler } from '@/handlers/ws';
-import { setRealtimeForTests, type Realtime, type RealtimeEvent } from '@/realtime/publish';
+import { setNotifierForTests, type PushMessage, type Notifier } from '@/lib/push';
+import { getRealtime, setRealtimeForTests, type Realtime, type RealtimeEvent } from '@/realtime/publish';
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const suite = hasDatabase ? describe : describe.skip;
 
-/** Builds the API Gateway WebSocket event shape the handler receives. */
-function wsEvent(routeKey: string, connectionId: string, extras: Record<string, unknown> = {}) {
-  return {
-    requestContext: { routeKey, connectionId, eventType: routeKey },
-    isBase64Encoded: false,
-    ...extras,
-  } as never;
-}
-
-async function invoke(routeKey: string, connectionId: string, extras: Record<string, unknown> = {}) {
-  const result = (await handler(wsEvent(routeKey, connectionId, extras))) as {
-    statusCode: number;
-    body?: string;
-  };
-  return result;
-}
-
-suite('websocket handler and realtime', () => {
+suite('realtime', () => {
   const app = createApp();
   let published: RealtimeEvent[] = [];
 
@@ -60,9 +43,9 @@ suite('websocket handler and realtime', () => {
 
   let asha = '';
   let ravi = '';
-  let nosy = '';
   let threadId = '';
   let ashaId = '';
+  let raviId = '';
 
   beforeAll(() => {
     process.env.JWT_SECRET = 'test-secret-value-that-is-long-enough-32';
@@ -82,13 +65,12 @@ suite('websocket handler and realtime', () => {
     await getDatabase().execute(sql`truncate table ${schema.users} cascade`);
     asha = await signUp('asha@example.com');
     ravi = await signUp('ravi@example.com');
-    nosy = await signUp('nosy@example.com');
 
-    const [me] = await getDatabase()
-      .select({ id: schema.users.id })
-      .from(schema.users)
-      .where(eq(schema.users.email, 'asha@example.com'));
-    ashaId = me!.id;
+    const people = await getDatabase()
+      .select({ id: schema.users.id, email: schema.users.email })
+      .from(schema.users);
+    ashaId = people.find((p) => p.email === 'asha@example.com')!.id;
+    raviId = people.find((p) => p.email === 'ravi@example.com')!.id;
 
     const invited = await request('/v1/connections', {
       method: 'POST',
@@ -105,139 +87,11 @@ suite('websocket handler and realtime', () => {
 
   afterEach(() => {
     setRealtimeForTests(null);
+    setNotifierForTests(null);
   });
 
   afterAll(async () => {
     await closeDatabase();
-  });
-
-  describe('$connect', () => {
-    it('registers a connection for a valid token', async () => {
-      const result = await invoke('$connect', 'conn-1', { queryStringParameters: { token: asha } });
-      expect(result.statusCode).toBe(200);
-
-      const rows = await getDatabase().select().from(schema.wsConnections);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ connectionId: 'conn-1', userId: ashaId, threadId: null });
-    });
-
-    it('refuses the handshake with no token, so no socket is ever established', async () => {
-      const result = await invoke('$connect', 'conn-2', {});
-      expect(result.statusCode).toBe(401);
-      expect(await getDatabase().select().from(schema.wsConnections)).toHaveLength(0);
-    });
-
-    it('refuses a forged or expired token', async () => {
-      for (const token of ['not-a-jwt', 'a.b.c', '']) {
-        const result = await invoke('$connect', 'conn-x', { queryStringParameters: { token } });
-        expect(result.statusCode, token).toBe(401);
-      }
-      expect(await getDatabase().select().from(schema.wsConnections)).toHaveLength(0);
-    });
-
-    it('refuses a token signed with a different secret', async () => {
-      process.env.JWT_SECRET = 'a-totally-different-secret-value-32-bytes';
-      resetSigningKeyCache();
-      const foreign = await signAccessToken({ userId: ashaId, email: 'asha@example.com' });
-      process.env.JWT_SECRET = 'test-secret-value-that-is-long-enough-32';
-      resetSigningKeyCache();
-
-      const result = await invoke('$connect', 'conn-3', { queryStringParameters: { token: foreign } });
-      expect(result.statusCode).toBe(401);
-    });
-
-    it('tolerates a retried connect for the same id', async () => {
-      await invoke('$connect', 'conn-1', { queryStringParameters: { token: asha } });
-      const again = await invoke('$connect', 'conn-1', { queryStringParameters: { token: asha } });
-      expect(again.statusCode).toBe(200);
-      expect(await getDatabase().select().from(schema.wsConnections)).toHaveLength(1);
-    });
-  });
-
-  describe('$disconnect', () => {
-    it('removes the registration', async () => {
-      await invoke('$connect', 'conn-1', { queryStringParameters: { token: asha } });
-      expect((await invoke('$disconnect', 'conn-1')).statusCode).toBe(200);
-      expect(await getDatabase().select().from(schema.wsConnections)).toHaveLength(0);
-    });
-
-    it('is harmless for an unknown connection', async () => {
-      expect((await invoke('$disconnect', 'never-existed')).statusCode).toBe(200);
-    });
-  });
-
-  describe('messages from the client', () => {
-    async function connected(token: string, id: string) {
-      await invoke('$connect', id, { queryStringParameters: { token } });
-      return id;
-    }
-
-    it('subscribes to a thread the caller is in', async () => {
-      await connected(asha, 'conn-1');
-      const result = await invoke('$default', 'conn-1', {
-        body: JSON.stringify({ action: 'subscribe', threadId }),
-      });
-      expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body!)).toMatchObject({ type: 'subscribed', threadId });
-
-      const [row] = await getDatabase().select().from(schema.wsConnections);
-      expect(row?.threadId).toBe(threadId);
-    });
-
-    it('refuses to subscribe to a thread the caller is not in', async () => {
-      // Re-checked here rather than assumed from the connect-time token, or a client
-      // could subscribe to any thread id it guessed.
-      await connected(nosy, 'conn-9');
-      const result = await invoke('$default', 'conn-9', {
-        body: JSON.stringify({ action: 'subscribe', threadId }),
-      });
-      expect(result.statusCode).toBe(404);
-
-      const [row] = await getDatabase().select().from(schema.wsConnections);
-      expect(row?.threadId).toBeNull();
-    });
-
-    it('refuses messages from an unregistered connection', async () => {
-      const result = await invoke('$default', 'ghost', {
-        body: JSON.stringify({ action: 'subscribe', threadId }),
-      });
-      expect(result.statusCode).toBe(401);
-    });
-
-    it('answers a ping and freshens the row', async () => {
-      await connected(asha, 'conn-1');
-      await getDatabase()
-        .update(schema.wsConnections)
-        .set({ lastSeenAt: new Date(Date.now() - 3600_000) })
-        .where(eq(schema.wsConnections.connectionId, 'conn-1'));
-
-      const result = await invoke('$default', 'conn-1', { body: JSON.stringify({ action: 'ping' }) });
-      expect(JSON.parse(result.body!)).toEqual({ type: 'pong' });
-
-      const [row] = await getDatabase().select().from(schema.wsConnections);
-      expect(Date.now() - row!.lastSeenAt.getTime()).toBeLessThan(10_000);
-    });
-
-    it('rejects malformed JSON and unknown actions', async () => {
-      await connected(asha, 'conn-1');
-      expect((await invoke('$default', 'conn-1', { body: 'not json' })).statusCode).toBe(400);
-      expect(
-        (await invoke('$default', 'conn-1', { body: JSON.stringify({ action: 'publish' }) })).statusCode,
-      ).toBe(400);
-      expect(
-        (await invoke('$default', 'conn-1', { body: JSON.stringify({ action: 'subscribe' }) })).statusCode,
-      ).toBe(400);
-    });
-
-    it('does not accept message writes over the socket', async () => {
-      // Writes go through the HTTP API so exactly one path authorizes them.
-      await connected(asha, 'conn-1');
-      const result = await invoke('$default', 'conn-1', {
-        body: JSON.stringify({ action: 'send', threadId, body: 'over the socket' }),
-      });
-      expect(result.statusCode).toBe(400);
-      expect(await getDatabase().select().from(schema.messages)).toHaveLength(0);
-    });
   });
 
   describe('publishing on send', () => {
@@ -253,7 +107,7 @@ suite('websocket handler and realtime', () => {
 
     it('publishes when a voice note is created', async () => {
       // The stub has to be in place before presigning: without it that call reaches the
-      // real S3 path and fails for want of AWS_REGION.
+      // default storage, which answers 503 while no media backend is configured.
       const { setStorageForTests } = await import('@/lib/storage');
       setStorageForTests({
         async presignUpload(key) { return `https://bucket.example/${key}`; },
@@ -284,10 +138,10 @@ suite('websocket handler and realtime', () => {
     });
 
     it('still succeeds when realtime is unavailable', async () => {
-      // A WebSocket failure must not turn a stored message into a failed request.
+      // A push failure must not turn a stored message into a failed request.
       setRealtimeForTests({
         async publishToThread() {
-          throw new Error('API Gateway unreachable');
+          throw new Error('FCM unreachable');
         },
       });
 
@@ -299,5 +153,166 @@ suite('websocket handler and realtime', () => {
       expect(response.status).toBe(201);
       expect(await getDatabase().select().from(schema.messages)).toHaveLength(1);
     });
+  });
+
+  /**
+   * The real implementation, not the fake. These cover the behaviour that replaced the
+   * WebSocket registry: who gets woken, who does not, and what happens to a token FCM
+   * has permanently rejected.
+   */
+  describe('push fan-out', () => {
+    let sent: PushMessage[] = [];
+
+    function notifier(result: (message: PushMessage) => Awaited<ReturnType<Notifier['send']>>): Notifier {
+      return {
+        async send(message) {
+          sent.push(message);
+          return result(message);
+        },
+      };
+    }
+
+    async function registerDevice(token: string, accessToken: string) {
+      const response = await request('/v1/device-tokens', {
+        method: 'POST',
+        token: accessToken,
+        body: JSON.stringify({ token, platform: 'android' }),
+      });
+      expect(response.status).toBeLessThan(300);
+    }
+
+    beforeEach(() => {
+      sent = [];
+      // Use the real push-based realtime for this block.
+      setRealtimeForTests(null);
+    });
+
+    it('wakes the other participant and not the sender', async () => {
+      await registerDevice('ravi-device-token', ravi);
+      await registerDevice('asha-device-token', asha);
+      setNotifierForTests(notifier(() => ({ ok: true })));
+
+      const delivered = await getRealtime().publishToThread({
+        type: 'message.created',
+        threadId,
+        payload: { messageId: 'abc', senderId: ashaId },
+      });
+
+      expect(delivered).toBe(1);
+      expect(sent.map((m) => m.token)).toEqual(['ravi-device-token']);
+    });
+
+    it('sends silently and carries identifiers only, never message content', async () => {
+      await registerDevice('ravi-device-token', ravi);
+      setNotifierForTests(notifier(() => ({ ok: true })));
+
+      await getRealtime().publishToThread({
+        type: 'message.created',
+        threadId,
+        payload: { messageId: 'abc', senderId: ashaId, body: 'a private sentence' },
+      });
+
+      expect(sent[0]!.silent).toBe(true);
+      expect(sent[0]!.data).toEqual({ type: 'message.created', threadId, messageId: 'abc' });
+      expect(JSON.stringify(sent[0])).not.toContain('a private sentence');
+    });
+
+    it('deactivates a token FCM has permanently rejected', async () => {
+      await registerDevice('dead-token', ravi);
+      setNotifierForTests(notifier(() => ({ ok: false, invalidToken: true, error: 'not-registered' })));
+
+      const delivered = await getRealtime().publishToThread({
+        type: 'message.created',
+        threadId,
+        payload: { messageId: 'abc', senderId: ashaId },
+      });
+
+      expect(delivered).toBe(0);
+      const [row] = await getDatabase()
+        .select({ isActive: schema.deviceTokens.isActive })
+        .from(schema.deviceTokens)
+        .where(eq(schema.deviceTokens.userId, raviId));
+      expect(row!.isActive).toBe(false);
+    });
+
+    it('leaves a token alone after a transient failure', async () => {
+      await registerDevice('flaky-token', ravi);
+      setNotifierForTests(notifier(() => ({ ok: false, invalidToken: false, error: 'unavailable' })));
+
+      await getRealtime().publishToThread({
+        type: 'message.created',
+        threadId,
+        payload: { messageId: 'abc', senderId: ashaId },
+      });
+
+      const [row] = await getDatabase()
+        .select({ isActive: schema.deviceTokens.isActive })
+        .from(schema.deviceTokens)
+        .where(eq(schema.deviceTokens.userId, raviId));
+      // A transient error must not cost the device its registration; the next message retries.
+      expect(row!.isActive).toBe(true);
+    });
+
+    it('is a no-op when the recipient has no registered device', async () => {
+      setNotifierForTests(notifier(() => ({ ok: true })));
+
+      const delivered = await getRealtime().publishToThread({
+        type: 'message.created',
+        threadId,
+        payload: { messageId: 'abc', senderId: ashaId },
+      });
+
+      expect(delivered).toBe(0);
+      expect(sent).toHaveLength(0);
+    });
+
+    it('does nothing for a thread that does not exist', async () => {
+      setNotifierForTests(notifier(() => ({ ok: true })));
+
+      const delivered = await getRealtime().publishToThread({
+        type: 'message.created',
+        threadId: '00000000-0000-0000-0000-000000000000',
+        payload: { messageId: 'abc', senderId: ashaId },
+      });
+
+      expect(delivered).toBe(0);
+      expect(sent).toHaveLength(0);
+    });
+  });
+
+  describe('the worker trigger', () => {
+    afterEach(() => {
+      delete process.env.WORKER_TRIGGER_SECRET;
+    });
+
+    it('does not exist when no secret is configured', async () => {
+      delete process.env.WORKER_TRIGGER_SECRET;
+      const response = await request('/internal/run-worker', { method: 'POST' });
+      expect(response.status).toBe(404);
+    });
+
+    it('refuses a wrong secret with the same 404, revealing nothing', async () => {
+      process.env.WORKER_TRIGGER_SECRET = 'the-real-secret';
+      const response = await request('/internal/run-worker', {
+        method: 'POST',
+        headers: { 'X-Worker-Secret': 'not-the-secret' },
+      });
+      expect(response.status).toBe(404);
+    });
+
+    it('runs the worker for the right secret', async () => {
+      process.env.WORKER_TRIGGER_SECRET = 'the-real-secret';
+      const response = await request('/internal/run-worker', {
+        method: 'POST',
+        headers: { 'X-Worker-Secret': 'the-real-secret' },
+      });
+      expect(response.status).toBe(200);
+      expect(response.body.ok).toBe(true);
+    });
+  });
+
+  // Kept so an unused import does not drift in; signing is covered properly in auth tests.
+  it('can sign an access token for the fixtures', async () => {
+    expect(typeof (await signAccessToken({ userId: ashaId, email: 'asha@example.com' }))).toBe('string');
   });
 });

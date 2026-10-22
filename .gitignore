@@ -75,3 +75,10 @@ design-exports/
 * 2.tsx
 * 2.json
 * 2.kt
+
+# Zoho Catalyst
+# The AppSail bundle is a build artefact: 64 MB of generated code and node_modules,
+# rebuilt by scripts/build-catalyst.sh. catalyst.json is config and IS committed.
+catalyst/api/
+# Per-developer CLI state: which project and environment this machine has selected.
+.catalystrc
