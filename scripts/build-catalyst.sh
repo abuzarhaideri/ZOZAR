@@ -12,8 +12,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER="$ROOT/server"
-OUT="$ROOT/catalyst/api"
+# Exported, not merely assigned: the `node -e` steps below read these out of the
+# environment. As plain shell variables they were invisible to those child processes, and
+# the script only ever worked when the caller happened to pass them on the command line.
+export SERVER="$ROOT/server"
+export OUT="$ROOT/catalyst/api"
 
 # Kept in step with server/package.json by hand. The list is short and changes rarely;
 # reading it out of package.json would mean parsing JSON in bash for no real gain.
