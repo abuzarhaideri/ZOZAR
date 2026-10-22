@@ -59,6 +59,7 @@
     "typecheck": "tsc --noEmit",
     "build:android:preview": "npx eas-cli build --platform android --profile preview",
     "verify:contrast": "node ./scripts/verify-contrast.mjs",
+    "e2e:live": "node ./scripts/e2e-live.mjs",
     "audit:appwrite": "node ./scripts/audit-appwrite.mjs"
   },
   "private": true,

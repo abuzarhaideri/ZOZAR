@@ -7,8 +7,8 @@
 # directory that is already runnable — entry point, manifest and real node_modules.
 #
 # The server's own source is bundled into a single file, but its dependencies are left
-# external and installed normally. Bundling them too would be smaller, but firebase-admin
-# resolves parts of itself at runtime and does not survive it.
+# external and installed normally. Bundling them too would be smaller, but some packages
+# resolve parts of themselves at runtime and do not survive it.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,7 +23,6 @@ export OUT="$ROOT/catalyst/api"
 DEPS=(
   "@hono/node-server"
   "drizzle-orm"
-  "firebase-admin"
   "hono"
   "jose"
   "pg"
@@ -84,23 +83,69 @@ node -e '
 '
 
 echo "==> Writing app-config.json"
-# Generated, not hand-edited: this directory is wiped on every build. Secrets are
-# deliberately absent — env_variables here would sit in the working tree and in the
-# deploy history, so DATABASE_URL, DATABASE_CA_CERT, JWT_SECRET,
-# FIREBASE_SERVICE_ACCOUNT and WORKER_TRIGGER_SECRET are set in the Catalyst console
-# instead, where console values also take precedence over anything in this file.
-cat > "$OUT/app-config.json" <<'CONFIG'
-{
-	"command": "node index.js",
-	"build_path": ".",
-	"stack": "node22",
-	"env_variables": {
-		"NODE_ENV": "production"
-	},
-	"memory": 512,
-	"scripts": {}
-}
-CONFIG
+# Generated, not hand-edited: this directory is wiped on every build.
+#
+# Secrets come from server/.env when it exists, and are written into env_variables so a
+# deploy carries them. That file is gitignored and $OUT is gitignored, so nothing secret
+# enters the repository — but the values do reach Catalyst, which is the point. Setting
+# the same names in the Catalyst console overrides whatever is here, so the console
+# remains the stronger source if you prefer it.
+#
+# Only names the server actually reads are forwarded, so an unrelated line in .env cannot
+# silently become part of the deployment, and empty values are skipped rather than
+# overwriting something already set in the console with a blank.
+node -e '
+  const fs = require("node:fs");
+  const FORWARD = [
+    "DATABASE_URL",
+    "DATABASE_CA_CERT",
+    "JWT_SECRET",
+    "WORKER_TRIGGER_SECRET",
+    "DB_POOL_MAX",
+  ];
+
+  const env = { NODE_ENV: "production" };
+  const envFile = process.env.SERVER + "/.env";
+  const forwarded = [];
+  const hasEnvFile = fs.existsSync(envFile);
+
+  if (hasEnvFile) {
+    for (const line of fs.readFileSync(envFile, "utf8").split("\n")) {
+      const at = line.indexOf("=");
+      if (at === -1 || line.trimStart().startsWith("#")) continue;
+      const key = line.slice(0, at).trim();
+      // Values are taken verbatim apart from surrounding quotes: a base64 certificate or
+      // a one-line JSON key must survive byte for byte.
+      const value = line.slice(at + 1).trim().replace(/^(["\x27])(.*)\1$/s, "$2");
+      if (FORWARD.includes(key) && value) { env[key] = value; forwarded.push(key); }
+    }
+  }
+
+  fs.writeFileSync(process.env.OUT + "/app-config.json", JSON.stringify({
+    command: "node index.js",
+    build_path: ".",
+    stack: "node22",
+    env_variables: env,
+    memory: 512,
+    scripts: {},
+  }, null, 2) + "\n");
+
+  // Names only. Printing a value here would put a database password into a terminal
+  // scrollback and into CI logs. The three states are reported separately: no file at
+  // all, a file whose values are still blank, and values actually carried.
+  if (!hasEnvFile) {
+    console.log("    no server/.env — set the variables in the Catalyst console instead");
+  } else if (forwarded.length === 0) {
+    console.log("    server/.env found but every value is empty — nothing forwarded");
+  } else {
+    console.log("    forwarded from server/.env: " + forwarded.join(", "));
+  }
+
+  const missing = FORWARD.filter((k) => k !== "DB_POOL_MAX" && !env[k]);
+  if (missing.length) {
+    console.log("    still unset (must be in the Catalyst console): " + missing.join(", "));
+  }
+'
 
 echo "==> Installing production dependencies"
 # --omit=dev and no package-lock: this tree is an artefact, not a project. --ignore-scripts
