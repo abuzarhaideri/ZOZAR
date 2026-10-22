@@ -50,10 +50,12 @@ Consequences accepted:
   would require a NAT gateway at roughly $32/month, which would dwarf every other cost
   here. Security therefore rests on TLS plus credentials, not network isolation.
 - Aiven's free plan has no static IPs, so the database cannot be IP-allowlisted.
-- Aiven's free plan cannot pick a cloud region, so database latency is not tunable. AWS
-  runs in `ap-south-1` for proximity to users in India, but the hop to Aiven is whatever
-  region Aiven assigned. If that hop proves slow, the fix is Aiven's paid tier, which can
-  be pinned to a region, not an AWS change.
+- Aiven's free plan picks a **continent**, not a region: the console offers Asia Pacific,
+  Australia, Europe and North America, and notes that a specific provider and region
+  require the Professional tier. Latency is therefore tunable only to continental
+  accuracy. Pick the continent the compute runs in — the Learner Lab deployment is in
+  `us-east-1`, so the database belongs in North America, while a Mumbai deployment would
+  want Asia Pacific. Getting this wrong costs roughly 200ms on every query.
 - The upgrade path, if traffic ever justifies it, is Aiven's paid tier for PgBouncer.
 
 ## Cost

@@ -21,7 +21,7 @@ Required before a real build:
 4. Public Appwrite resource IDs supplied through an ignored local/EAS environment. Appwrite API keys and Firebase service-account JSON exist only as Appwrite Function variables.
 5. Physical Android test devices. Remote push requires an Expo development/internal build, not Expo Go.
 
-Never commit EAS tokens, Android keystores, Firebase service-account JSON, Appwrite API keys, Supabase service-role keys, or `.env*.local` files.
+Never commit EAS tokens, Android keystores, Firebase service-account JSON, the Aiven database URL or CA certificate, Catalyst CLI tokens, or `.env*.local` files.
 
 Android still controls special access. The app can open the exact-alarm and Do Not Disturb Settings screens, but it cannot grant access itself. ZO-ZAR's local Expo module reads `AlarmManager.canScheduleExactAlarms()` on Android 12+, so onboarding only confirms wake protection when Android reports exact-alarm access. The wake channel requests DND bypass; the user and OEM system settings remain authoritative.
 

@@ -7,7 +7,8 @@
       "environment": "preview",
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_ANDROID_PACKAGE": "com.zozar.app"
+        "EXPO_PUBLIC_ANDROID_PACKAGE": "com.zozar.app",
+        "EXPO_PUBLIC_API_URL": "https://zozar-api-50047090742.development.catalystappsail.in"
       },
       "android": {
         "buildType": "apk"

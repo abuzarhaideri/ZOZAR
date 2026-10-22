@@ -11,7 +11,7 @@ import {
   scheduleWakeNotifications,
   scheduleWakeSoundTest,
 } from '@/services/notification-service';
-import { registerForPushNotifications } from '@/services/push-token-service';
+import { ensureNotificationsReady } from '@/services/push-token-service';
 import { hasCompletedPermissionSetup, markPermissionSetupComplete } from '@/services/setup-state';
 import type { VoiceNoteArtifact } from '@/services/voice-recorder-service';
 
@@ -214,9 +214,9 @@ export function ZOZARStoreProvider({ children }: PropsWithChildren) {
   }
 
   function registerPushToken() {
-    // Nothing to register against without a server.
-    if (!isServerBacked(repository.mode)) return;
-    void registerForPushNotifications({ persist: (registration) => repository.upsertDeviceToken(registration) }).catch(() => undefined);
+    // No push provider, so there is no token to register. The permission and the alarm
+    // channels are still set up, because local notifications depend on them.
+    void ensureNotificationsReady().catch(() => undefined);
   }
 
   async function schedulePlan(plan: WakePlan) {

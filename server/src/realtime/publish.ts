@@ -1,17 +1,26 @@
-import {
-  ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
-} from '@aws-sdk/client-apigatewaymanagementapi';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { getDatabase, schema, type Database } from '@/db/client';
+import { getNotifier } from '@/lib/push';
 
 /**
- * Pushes events to subscribed WebSocket connections, replacing Appwrite Realtime.
+ * Pushes events to the other people in a conversation.
  *
- * The connection registry lives in Postgres rather than DynamoDB. That keeps the stack to
- * one datastore, and the rows are tiny and short-lived; the cost is a little of the
- * connection budget, which the WebSocket Lambda's concurrency ceiling already accounts for.
+ * This used to be API Gateway WebSockets: clients held a socket, a registry table mapped
+ * socket to thread, and the server posted frames to each one. Catalyst has no equivalent
+ * — serverless functions cannot accept a socket at all, and AppSail caps every request at
+ * thirty seconds and recycles instances after five minutes, so a long-lived connection
+ * cannot exist there no matter how it is written. Cross-instance fan-out has nothing to
+ * sit on either, since Catalyst offers no pub/sub.
+ *
+ * So realtime is now a silent FCM data message: the server wakes the recipient's app and
+ * the app fetches. The device already holds an FCM connection for alarms, so this adds no
+ * new transport and no new credential.
+ *
+ * What changes for the product: delivery is near-real-time rather than instant, and a
+ * device with notifications revoked will not be nudged — it still sees the message on its
+ * next fetch. Nothing is lost, because the message was durably stored before this ran;
+ * this only decides how quickly the other phone finds out.
  */
 
 export type RealtimeEvent = {
@@ -21,57 +30,80 @@ export type RealtimeEvent = {
 };
 
 export type Realtime = {
-  publishToThread(event: RealtimeEvent, excludeConnectionId?: string): Promise<number>;
+  /**
+   * Returns the number of devices nudged.
+   *
+   * `excludeUserId` defaults to the event's own `senderId`, so the person who caused the
+   * event is not woken by it.
+   */
+  publishToThread(event: RealtimeEvent, excludeUserId?: string): Promise<number>;
 };
 
-let client: ApiGatewayManagementApiClient | undefined;
-
-function management(): ApiGatewayManagementApiClient {
-  if (client) return client;
-  const endpoint = process.env.WS_ENDPOINT?.trim();
-  if (!endpoint) throw new Error('Missing required environment variable: WS_ENDPOINT');
-  client ??= new ApiGatewayManagementApiClient({ endpoint });
-  return client;
-}
-
-function apiGatewayRealtime(database: Database = getDatabase()): Realtime {
+function pushRealtime(database: Database = getDatabase()): Realtime {
   return {
-    async publishToThread(event, excludeConnectionId) {
-      const subscribers = await database
-        .select({ connectionId: schema.wsConnections.connectionId })
-        .from(schema.wsConnections)
-        .where(eq(schema.wsConnections.threadId, event.threadId));
+    async publishToThread(event, excludeUserId) {
+      const [thread] = await database
+        .select({ a: schema.chatThreads.participantA, b: schema.chatThreads.participantB })
+        .from(schema.chatThreads)
+        .where(eq(schema.chatThreads.id, event.threadId))
+        .limit(1);
+      if (!thread) return 0;
 
-      const body = Buffer.from(JSON.stringify(event));
+      const sender = typeof event.payload.senderId === 'string' ? event.payload.senderId : undefined;
+      const excluded = excludeUserId ?? sender;
+      const recipients = [thread.a, thread.b].filter(
+        (id): id is string => typeof id === 'string' && id !== excluded,
+      );
+      if (recipients.length === 0) return 0;
+
+      const devices = await database
+        .select({ id: schema.deviceTokens.id, token: schema.deviceTokens.token })
+        .from(schema.deviceTokens)
+        .where(
+          and(inArray(schema.deviceTokens.userId, recipients), eq(schema.deviceTokens.isActive, true)),
+        );
+      if (devices.length === 0) return 0;
+
+      const notifier = getNotifier();
+      // Every value in an FCM data payload must be a string, so the event is flattened
+      // rather than nested. The client reads these keys and refetches; the payload is
+      // deliberately only an identifier, never message content, so a push cannot leak a
+      // conversation to a notification log.
+      const data: Record<string, string> = {
+        type: event.type,
+        threadId: event.threadId,
+        ...(typeof event.payload.messageId === 'string' ? { messageId: event.payload.messageId } : {}),
+      };
+
+      const stale: string[] = [];
       let delivered = 0;
-      const dead: string[] = [];
 
       await Promise.all(
-        subscribers.map(async ({ connectionId }) => {
-          if (connectionId === excludeConnectionId) return;
-          try {
-            await management().send(new PostToConnectionCommand({ ConnectionId: connectionId, Data: body }));
+        devices.map(async (device) => {
+          const result = await notifier.send({
+            token: device.token,
+            title: 'ZO-ZAR',
+            body: 'New activity',
+            data,
+            silent: true,
+          });
+          if (result.ok) {
             delivered += 1;
-          } catch (error) {
-            // 410 Gone is how API Gateway reports a connection that has closed without a
-            // $disconnect reaching us. It is the authoritative signal to drop the row,
-            // so a stale registry self-heals rather than growing.
-            const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
-            if (status === 410) {
-              dead.push(connectionId);
-            } else {
-              console.error('[realtime] could not post to connection', { connectionId, error });
-            }
+          } else if (result.invalidToken) {
+            // The FCM equivalent of API Gateway's 410 Gone: the token will never work
+            // again, so the row is deactivated and the registry self-heals.
+            stale.push(device.id);
+          } else {
+            console.error('[realtime] could not nudge device', { deviceId: device.id, error: result.error });
           }
         }),
       );
 
-      if (dead.length > 0) {
-        await Promise.all(
-          dead.map((connectionId) =>
-            database.delete(schema.wsConnections).where(eq(schema.wsConnections.connectionId, connectionId)),
-          ),
-        );
+      if (stale.length > 0) {
+        await database
+          .update(schema.deviceTokens)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(inArray(schema.deviceTokens.id, stale));
       }
 
       return delivered;
@@ -84,7 +116,7 @@ let resolved: Realtime | undefined;
 
 export function getRealtime(): Realtime {
   if (override) return override;
-  resolved ??= apiGatewayRealtime();
+  resolved ??= pushRealtime();
   return resolved;
 }
 
@@ -96,7 +128,7 @@ export function setRealtimeForTests(implementation: Realtime | null): void {
  * Publishes without letting a realtime failure fail the request that caused it.
  *
  * A message is already durably stored by the time this runs, and the client will see it on
- * its next fetch, so a WebSocket problem must never turn a successful send into an error.
+ * its next fetch, so a push problem must never turn a successful send into an error.
  * Realtime is an optimisation here, not the source of truth.
  */
 export async function publishQuietly(event: RealtimeEvent): Promise<void> {
@@ -105,29 +137,4 @@ export async function publishQuietly(event: RealtimeEvent): Promise<void> {
   } catch (error) {
     console.error('[realtime] publish failed; clients will catch up on next fetch', { error });
   }
-}
-
-/** Registers a connection as watching a thread, after confirming the caller is in it. */
-export async function subscribeConnection(
-  database: Database,
-  connectionId: string,
-  userId: string,
-  threadId: string,
-): Promise<boolean> {
-  const [thread] = await database
-    .select({ a: schema.chatThreads.participantA, b: schema.chatThreads.participantB })
-    .from(schema.chatThreads)
-    .where(eq(schema.chatThreads.id, threadId))
-    .limit(1);
-
-  // Participation is re-checked here and not assumed from the connect-time token: a
-  // client could otherwise subscribe to any thread id it guessed.
-  if (!thread || (thread.a !== userId && thread.b !== userId)) return false;
-
-  await database
-    .update(schema.wsConnections)
-    .set({ threadId, lastSeenAt: new Date() })
-    .where(and(eq(schema.wsConnections.connectionId, connectionId), eq(schema.wsConnections.userId, userId)));
-
-  return true;
 }
