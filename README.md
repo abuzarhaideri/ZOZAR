@@ -117,7 +117,7 @@ rest of the stack combined. The full reasoning is in
 
 While deployment is paused, the app runs on an on-device store: accounts, alarms and the
 streak persist on the phone, but a trusted person can't actually be notified and chat
-can't reach other phones. Both need the live backend. Turning deploys on is one repository
+can't reach other phones. Both need the live backend. Turning deploys on one repository
 variable once [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) is done.
 
 ## Running it
