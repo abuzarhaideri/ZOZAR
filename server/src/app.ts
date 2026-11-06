@@ -2,7 +2,10 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { cors } from 'hono/cors';
 
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 import { verifyAccessToken, bearerFromHeader } from '@/auth/tokens';
+import { runAllTasks } from '@/worker/tasks';
 import { authRoutes } from '@/routes/auth';
 import { commitmentRoutes } from '@/routes/commitments';
 import { chatRoutes } from '@/routes/chat';
@@ -12,6 +15,13 @@ import { uploadRoutes } from '@/routes/uploads';
 import { connectionRoutes } from '@/routes/connections';
 import { wakeOccurrenceRoutes, wakePlanRoutes } from '@/routes/wake';
 import { unauthorized, type AppEnv } from '@/lib/http';
+
+/** Constant-time secret comparison over SHA-256 digests, so operands are always the same
+ * length and the comparison reveals nothing through timing. */
+function secretMatches(supplied: string, expected: string): boolean {
+  const digest = (value: string) => createHash('sha256').update(value, 'utf8').digest();
+  return timingSafeEqual(digest(supplied), digest(expected));
+}
 
 export function createApp() {
   const app = new Hono<AppEnv>();
@@ -23,6 +33,35 @@ export function createApp() {
   // Unauthenticated: a plain liveness probe that must not touch the database, so it stays
   // useful precisely when the connection budget is exhausted.
   app.get('/health', (c) => c.json({ ok: true }));
+
+  /**
+   * Scheduled work, triggered over HTTP.
+   *
+   * On AWS this was a Lambda on an EventBridge rule, declared in CDK alongside everything
+   * else. Catalyst cannot do that: its Job Scheduling service is created through the
+   * console or a REST call and cannot be declared in `catalyst.json`, so the schedule
+   * lives outside the repository no matter how this is arranged. Given that, the work
+   * stays in this process — one deployment, one connection pool, one place to read logs —
+   * and the scheduler's only job is to call this route.
+   *
+   * It is guarded by a shared secret rather than left open, and the route does not exist
+   * at all unless that secret is configured, so an unconfigured deployment cannot have
+   * its worker driven by a stranger.
+   */
+  app.post('/internal/run-worker', async (c) => {
+    const expected = process.env.WORKER_TRIGGER_SECRET?.trim();
+    if (!expected) return c.notFound();
+
+    const supplied = c.req.header('X-Worker-Secret') ?? '';
+    // Compared on fixed-length digests so the check cannot be timed, and so two secrets
+    // of different lengths do not make timingSafeEqual throw.
+    if (!secretMatches(supplied, expected)) return c.notFound();
+
+    const started = Date.now();
+    const report = await runAllTasks();
+    console.log('[worker] run complete', { durationMs: Date.now() - started, ...report });
+    return c.json({ ok: true, durationMs: Date.now() - started, ...report });
+  });
 
   app.route('/auth', authRoutes);
 
@@ -54,7 +93,7 @@ export function createApp() {
 
   /**
    * Nothing but the shaped errors reaches the client. An unexpected throw is logged in
-   * full for CloudWatch and reported as a bare 500, so a database message or a stack
+   * full for the Catalyst logs and reported as a bare 500, so a database message or a stack
    * trace is never part of a response body.
    */
   app.onError((error, c) => {

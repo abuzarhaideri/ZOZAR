@@ -19,7 +19,6 @@
     "expo-env.d.ts"
   ],
   "exclude": [
-    "supabase/functions/**",
     "node_modules"
   ]
 }

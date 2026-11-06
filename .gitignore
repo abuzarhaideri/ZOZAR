@@ -38,11 +38,14 @@ yarn-error.*
 .env.*
 !.env.example
 
-# backend CLI state and server credentials
-supabase/.temp/
-supabase/.branches/
+# server credentials
 **/*service-account*.json
 **/*firebase-adminsdk*.json
+# A real service-account key was committed once as firebase-key.json, which matched
+# neither pattern above. Match on what the file IS, not what it happens to be named.
+firebase-key.json
+**/*firebase*key*.json
+**/*-key.json
 
 # generated release artifacts
 *.apk
@@ -75,3 +78,10 @@ design-exports/
 * 2.tsx
 * 2.json
 * 2.kt
+
+# Zoho Catalyst
+# The AppSail bundle is a build artefact: 64 MB of generated code and node_modules,
+# rebuilt by scripts/build-catalyst.sh. catalyst.json is config and IS committed.
+catalyst/api/
+# Per-developer CLI state: which project and environment this machine has selected.
+.catalystrc

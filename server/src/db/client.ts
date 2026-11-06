@@ -52,26 +52,66 @@ function tlsOptions(): ConnectionOptions | false {
 }
 
 /**
- * One connection per container, deliberately.
+ * Removes `sslmode` from the connection string.
  *
- * Aiven's free PostgreSQL plan allows 20 connections and offers no PgBouncer, and RDS
- * Proxy cannot front a non-AWS database. Each Lambda container therefore takes exactly
- * one connection, and reserved concurrency on each function caps how many containers can
- * exist at once. See docs/ARCHITECTURE.md for the full budget.
+ * `pg` builds its effective config as `Object.assign({}, config, parse(connectionString))`
+ * — the parsed URL wins over what the caller passed. `pg-connection-string` returns
+ * `ssl: {}` for `sslmode=require`, so that empty object **replaces** the options from
+ * `tlsOptions()`, discarding Aiven's CA. TLS stays on, nothing can verify the peer, and
+ * every query dies with SELF_SIGNED_CERT_IN_CHAIN.
  *
- * The pool is created at module scope so it survives container reuse across invocations;
- * recreating it per request would spend the whole budget on handshakes.
+ * Stripping the parameter leaves no `ssl` key in the parsed result, so the explicit
+ * options survive the merge and remain the single source of truth. This is stricter than
+ * `sslmode=require`, not looser: the connection still demands TLS and now actually
+ * verifies the certificate against the project CA.
+ *
+ * Done by splitting on the query string rather than with `new URL()`, which percent-
+ * decodes and re-encodes the password and can therefore change it.
  */
+function withoutSslmode(url: string): string {
+  const queryAt = url.indexOf('?');
+  if (queryAt === -1) return url;
+  const base = url.slice(0, queryAt);
+  const params = url
+    .slice(queryAt + 1)
+    .split('&')
+    .filter((param) => !/^sslmode=/i.test(param));
+  return params.length > 0 ? `${base}?${params.join('&')}` : base;
+}
+
+/**
+ * The connection budget, re-derived for Catalyst AppSail.
+ *
+ * Aiven's free PostgreSQL plan allows 20 connections and offers no PgBouncer, so the
+ * ceiling is hard and shared by everything that talks to the database.
+ *
+ * On Lambda this was `max: 1`: each container served one request at a time, so a second
+ * connection could never be used, and reserved concurrency capped the number of
+ * containers. AppSail is the opposite shape — a long-lived Node process serving up to 100
+ * concurrent requests, scaling out to at most 5 instances. Keeping `max: 1` there would
+ * not save connections, it would serialise every concurrent request behind a single
+ * socket and turn the pool into the bottleneck.
+ *
+ * So the budget is spent the other way round: 5 instances x 3 connections = 15, leaving 5
+ * of Aiven's 20 for migrations, a psql session and Aiven's own management. DB_POOL_MAX
+ * exists so this can be lowered without a deploy if the ceiling is ever hit.
+ */
+const DEFAULT_POOL_MAX = 3;
+
+function poolMax(): number {
+  const configured = Number(process.env.DB_POOL_MAX);
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_POOL_MAX;
+}
 export function getDatabase(): Database {
   if (database) return database;
 
   pool = new pg.Pool({
-    connectionString: requireEnv('DATABASE_URL'),
+    connectionString: withoutSslmode(requireEnv('DATABASE_URL')),
     ssl: tlsOptions(),
-    max: 1,
-    // A frozen Lambda container cannot run timers, so this only reclaims connections in
-    // long-lived processes such as the migrator and local development. Reserved
-    // concurrency, not this value, is what keeps the budget.
+    max: poolMax(),
+    // AppSail instances are long-lived and idle between bursts, so this now does real
+    // work: connections are handed back to Aiven during quiet periods instead of being
+    // held for the life of the instance.
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 8_000,
     // Aiven drops idle TCP sessions; keepalives stop a reused container from inheriting a
@@ -82,7 +122,7 @@ export function getDatabase(): Database {
 
   pool.on('error', (error) => {
     // An idle client erroring must not take the container down; the next checkout
-    // reconnects. Logging keeps it visible in CloudWatch.
+    // reconnects. Logging keeps it visible in the Catalyst logs.
     console.error('[db] idle client error', error);
   });
 
@@ -90,7 +130,7 @@ export function getDatabase(): Database {
   return database;
 }
 
-/** Only for the migrator, tests, and local scripts. Lambda handlers must never call this:
+/** Only for the migrator, tests, and local scripts. The AppSail process must never call this:
  * closing the pool would discard the connection the next invocation expects to reuse. */
 export async function closeDatabase(): Promise<void> {
   await pool?.end();
@@ -99,3 +139,6 @@ export async function closeDatabase(): Promise<void> {
 }
 
 export { schema };
+
+/** Exposed for tests only; see server/test/db-tls.test.ts. */
+export const __test = { withoutSslmode };

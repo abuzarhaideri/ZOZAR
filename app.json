@@ -12,8 +12,7 @@
     },
     "android": {
       "package": "com.zozar.app",
-      "versionCode": 5,
-      "googleServicesFile": "./google-services.json",
+      "versionCode": 6,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO",

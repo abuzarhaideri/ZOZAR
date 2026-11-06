@@ -178,7 +178,6 @@ server/     API, WebSocket and worker Lambdas, with tests. Independent npm proje
 infra/      AWS CDK app. Independent npm project.
 scripts/    Contrast verification, one-time AWS bootstrap, and legacy Appwrite tools.
 docs/       Architecture, deployment runbook, screenshots.
-supabase/   Legacy schema from before the move to AWS; not used.
 ```
 
 `server/` and `infra/` are deliberately not npm workspaces: Metro watches the repository
